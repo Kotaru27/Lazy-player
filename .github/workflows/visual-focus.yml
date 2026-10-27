@@ -1,0 +1,56 @@
+name: Lazy Player Focus visual smoke QA
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/visual-focus.yml', 'tools/focus-smoke.sh']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  screenshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable KVM when available
+        run: |
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; ls -l /dev/kvm; fi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Compile APK
+        run: |
+          sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+          gradle --no-daemon :app:assembleDebug
+      - name: Generate synthetic 35-second FLAC files
+        run: |
+          ffmpeg -hide_banner -loglevel error -f lavfi -i sine=frequency=440:duration=35 -c:a flac \
+            -metadata title="Stage Light" -metadata artist="QA Artist" -metadata album="QA Collection" \
+            "$RUNNER_TEMP/Stage_Light.flac"
+          ffmpeg -hide_banner -loglevel error -f lavfi -i sine=frequency=550:duration=35 -c:a flac \
+            -metadata title="Second Track" -metadata artist="QA Artist" -metadata album="QA Collection" \
+            "$RUNNER_TEMP/Second_Track.flac"
+      - name: Visual interaction and screenshot capture
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_5
+          sdcard-path-or-size: 512M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: bash tools/focus-smoke.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: focus-v041-rendered-screen-evidence
+          path: screenshots/
+          if-no-files-found: warn
