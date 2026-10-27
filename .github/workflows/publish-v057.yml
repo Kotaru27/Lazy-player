@@ -1,0 +1,88 @@
+name: Publish signed Lazy Player v0.5.7 Unified Player
+on:
+  push:
+    branches: ['redesign/v057-unified-player']
+    paths:
+      - '.github/workflows/publish-v057.yml'
+      - 'tools/reconstruct_signed_v057.py'
+      - 'release/v057_signed_delta.b64'
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  signed-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Prepare Android signing inspection tools
+        run: sdkmanager 'build-tools;35.0.0'
+      - name: Require green exact-source Android and emulator CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh run view 40555418556 -R "$GITHUB_REPOSITORY" --json conclusion --jq '.conclusion')" = success
+          test "$(gh run view 40555418638 -R "$GITHUB_REPOSITORY" --json conclusion --jq '.conclusion')" = success
+          test "$(gh run view 40555418556 -R "$GITHUB_REPOSITORY" --json headSha --jq '.headSha')" = '6d966890ae8c8bd280133c899164941406a2adae'
+          test "$(gh run view 40555418638 -R "$GITHUB_REPOSITORY" --json headSha --jq '.headSha')" = '6d966890ae8c8bd280133c899164941406a2adae'
+      - name: Download exact tested v0.5.7 Android APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh run download 40555418556 -R "$GITHUB_REPOSITORY" -n lazy-player-0.5.7-preview-apk -D dist
+          echo '384ff32c6c4de951bb09c901e7fb64c20f754eecee7717974d0c180cd373586a  dist/app-debug.apk' | sha256sum --check
+      - name: Reconstruct known owner-signed APK and verify identity
+        run: |
+          set -euo pipefail
+          python3 tools/reconstruct_signed_v057.py dist/app-debug.apk release/v057_signed_delta.b64 dist/LazyPlayer-v0.5.7-Preview.apk
+          echo '1d40af3998908f1df721a4aa988f4609016a7193c6e791f8da0fbbd8cf4af36d  dist/LazyPlayer-v0.5.7-Preview.apk' | sha256sum --check
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/LazyPlayer-v0.5.7-Preview.apk | tee /tmp/badging
+          grep -F "package: name='com.lazy.player.preview'" /tmp/badging
+          grep -F "versionCode='8'" /tmp/badging
+          grep -F "versionName='0.5.7-preview'" /tmp/badging
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs dist/LazyPlayer-v0.5.7-Preview.apk | tee /tmp/certs
+          grep -F '8b329cb559e2ff4e39d3106cd8993af0463ceef7da8adf6fbaece6b4da0f58c4' /tmp/certs
+          (cd dist && sha256sum LazyPlayer-v0.5.7-Preview.apk > SHA256SUMS.txt)
+      - name: Publish immutable GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag='v0.5.7-preview'
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release already exists; refusing overwrite."
+            exit 1
+          fi
+          cat >/tmp/notes.md <<'NOTES'
+          ## Lazy Player v0.5.7 — Unified Player Preview
+          
+          Install **LazyPlayer-v0.5.7-Preview.apk** from Assets. This is a signed Android update, not a design mockup.
+          
+          - Shared state-driven, finger-tracked swipe interaction across mini-player and Now Playing, requesting the next Media3 item at swipe completion without the earlier 175ms serial playback delay.
+          - Responsive, synchronized artwork/metadata switching, with no speculative neighbour under shuffle and bounded recovery if Media3 never acknowledges a seek.
+          - More distinctive album and no-cover placeholders generated deterministically from metadata; visible album counts, clearer active-track highlighting and refined dual-level floating navigation.
+          - Adjacent 192px mini and 640px full cover prefetch; cache strategy stays off the UI decode thread.
+          - Preserves current search, favourite, folders, shuffle, repeat, queue, FLAC playback paths, USB DAC status and offline operation.
+          
+          **Verification**: [Android/JVM build](https://github.com/Kotaru27/Lazy-player/actions/runs/40555418556) passed; [emulator UI tests](https://github.com/Kotaru27/Lazy-player/actions/runs/40555418638) passed 9 cases at 100%, 9 cases at 135%, 1 at 200% font scale (19 successful instrumented executions). Synthetic media change tests are not physical phone playback tests.
+          
+          **Identity:** `com.lazy.player.preview`, versionCode 8, versionName `0.5.7-preview`, owner preview signing fingerprint `8b329cb559e2ff4e39d3106cd8993af0463ceef7da8adf6fbaece6b4da0f58c4`. Installs over the other stable-key previews including v0.5.6; debug-signed legacy v0.5.0 is not compatible.
+          
+          **Limitations:** hardware 60/90/120Hz frame pacing, USB DAC and audio sample-rate paths, actual lossless FLAC media, exact shared-element artwork geometry, and optical/refraction glass effects are not yet device-certified.
+          
+          Exact tested source commit: `6d966890ae8c8bd280133c899164941406a2adae`.
+          Debug build SHA-256: `384ff32c6c4de951bb09c901e7fb64c20f754eecee7717974d0c180cd373586a`.
+          Signed APK SHA-256: `1d40af3998908f1df721a4aa988f4609016a7193c6e791f8da0fbbd8cf4af36d`.
+          Source branch `redesign/v057-unified-player`; `main` remains unchanged.
+          NOTES
+          gh release create "$tag" dist/LazyPlayer-v0.5.7-Preview.apk dist/SHA256SUMS.txt \
+            -R "$GITHUB_REPOSITORY" --target 6d966890ae8c8bd280133c899164941406a2adae \
+            --title 'Lazy Player v0.5.7 — Unified Player' --notes-file /tmp/notes.md --latest
+          gh release view "$tag" -R "$GITHUB_REPOSITORY" --json url,tagName,assets,isDraft
