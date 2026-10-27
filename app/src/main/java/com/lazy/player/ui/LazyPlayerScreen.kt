@@ -8,7 +8,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.*
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,11 +21,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -98,7 +95,7 @@ fun LazyPlayerScreen(
                         } else {
                             Column {
                                 Text("lazy player", fontSize = 31.sp, fontWeight = FontWeight.Light, color = MistWhite, letterSpacing = (-1.3).sp)
-                                Text("YOUR MUSIC, IN ITS ELEMENT", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = SoftText, letterSpacing = 2.sp)
+                                Text("YOUR MUSIC, IN ITS ELEMENT", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = SoftText, letterSpacing = 2.sp)
                             }
                         }
                         Spacer(Modifier.weight(1f))
@@ -141,7 +138,7 @@ fun LazyPlayerScreen(
                             ) {
                                 Grouping.entries.forEach { tab ->
                                     val active = grouping == tab
-                                    Box(Modifier.clip(CircleShape).then(if (active) Modifier.background(Color.White.copy(alpha = 0.94f)) else Modifier.glass(30)).clickable { grouping = tab }.padding(horizontal = 19.dp, vertical = 11.dp)) {
+                                    Box(Modifier.heightIn(min = 48.dp).clip(CircleShape).then(if (active) Modifier.background(Color.White.copy(alpha = 0.94f)) else Modifier.glass(30)).clickable { grouping = tab }.padding(horizontal = 19.dp, vertical = 13.dp)) {
                                         Text(tab.name, color = if (active) LazyNight else MistWhite, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                                     }
                                 }
@@ -271,14 +268,14 @@ private fun NoResults(liked: Boolean) {
 
 @Composable
 private fun SoftIcon(image: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
-    IconButton(onClick = onClick, modifier = Modifier.size(43.dp).glass(22)) {
+    IconButton(onClick = onClick, modifier = Modifier.size(48.dp).glass(24)) {
         Icon(image, contentDescription = label, tint = MistWhite, modifier = Modifier.size(20.dp))
     }
 }
 
 @Composable
 private fun GroupRow(title: String, tracks: List<AudioTrack>, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(20.dp)).clickable(onClick = onClick).padding(horizontal = 9.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 84.dp).clip(RoundedCornerShape(20.dp)).clickable(onClick = onClick).padding(horizontal = 9.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Artwork(tracks.firstOrNull(), Modifier.size(66.dp), 16.dp)
         Spacer(Modifier.width(17.dp))
         Column(Modifier.weight(1f)) {
@@ -293,7 +290,7 @@ private fun GroupRow(title: String, tracks: List<AudioTrack>, onClick: () -> Uni
 @Composable
 private fun TrackRow(track: AudioTrack, selected: Boolean, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().height(72.dp).clip(RoundedCornerShape(20.dp))
+        Modifier.fillMaxWidth().heightIn(min = 72.dp).clip(RoundedCornerShape(20.dp))
             .then(if (selected) Modifier.background(Color.White.copy(alpha = 0.09f)) else Modifier)
             .clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -313,8 +310,8 @@ private fun TrackRow(track: AudioTrack, selected: Boolean, onClick: () -> Unit) 
 
 @Composable
 private fun NavigationItem(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, active: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Row(modifier.fillMaxHeight().clip(CircleShape).clickable(onClick = onClick), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, title, Modifier.size(20.dp), tint = if (active) MistWhite else SoftText)
+    Row(modifier.fillMaxHeight().clip(CircleShape).background(if (active) Color.White.copy(alpha = 0.12f) else Color.Transparent).clickable(onClick = onClick), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, Modifier.size(20.dp), tint = if (active) MistWhite else SoftText)
         Spacer(Modifier.width(9.dp))
         Text(title, fontSize = 13.sp, color = if (active) MistWhite else SoftText, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal)
     }
@@ -365,20 +362,21 @@ private fun NowPlaying(
     val fraction = (draggedFraction ?: (if (duration > 0) position.toFloat() / duration else 0f)).coerceIn(0f, 1f)
     BoxWithConstraints(Modifier.fillMaxSize().background(LazyNight)) {
         val compact = maxHeight < 790.dp
+        val narrow = maxWidth < 380.dp
         val coverSize = (maxHeight - (if (compact) 475.dp else 525.dp)).coerceIn(170.dp, 370.dp).coerceAtMost(maxWidth - 64.dp)
-        Artwork(track, Modifier.fillMaxSize(), corner = 0.dp, blurred = true)
+        Artwork(track, Modifier.fillMaxWidth().height(maxHeight * 0.62f), corner = 0.dp, blurred = true)
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xC9100D1A), Color(0xE20E0C16), Color(0xFC0D0B14)))))
-        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 30.dp)) {
+        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = if (narrow) 20.dp else 30.dp)) {
             Row(Modifier.fillMaxWidth().padding(top = 18.dp), verticalAlignment = Alignment.CenterVertically) {
                 SoftIcon(Icons.Rounded.KeyboardArrowDown, "Close player", onDismiss)
                 Spacer(Modifier.weight(1f))
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("NOW PLAYING", fontSize = 10.sp, color = SoftText, letterSpacing = 2.4.sp, fontWeight = FontWeight.SemiBold)
+                    Text("NOW PLAYING", fontSize = 11.sp, color = SoftText, letterSpacing = 2.4.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(6.dp))
                     Text("From your library", fontSize = 12.sp, color = MistWhite)
                 }
                 Spacer(Modifier.weight(1f))
-                SoftIcon(Icons.Rounded.QueueMusic, "Queue", onQueue)
+                SoftIcon(Icons.Rounded.QueueMusic, "Open playback queue", onQueue)
             }
             Spacer(Modifier.height(if (compact) 15.dp else 26.dp))
             BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -393,7 +391,7 @@ private fun NowPlaying(
                     Text(track.artist, color = SoftText, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 IconButton(onClick = onFavorite, modifier = Modifier.size(46.dp).glass(23)) {
-                    Icon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, "Toggle favourite", tint = if (liked) Lavender else MistWhite, modifier = Modifier.size(23.dp))
+                    Icon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (liked) "Remove from favourites" else "Add to favourites", tint = if (liked) Lavender else MistWhite, modifier = Modifier.size(23.dp))
                 }
             }
             Spacer(Modifier.height(if (compact) 10.dp else 25.dp))
@@ -413,13 +411,13 @@ private fun NowPlaying(
             }
             Spacer(Modifier.height(if (compact) 13.dp else 24.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onShuffle) { Icon(Icons.Rounded.Shuffle, "Shuffle", tint = if (shuffle) Lavender else SoftText, modifier = Modifier.size(21.dp)) }
-                IconButton(onClick = onPrevious, modifier = Modifier.size(58.dp)) { Icon(Icons.Rounded.SkipPrevious, "Previous", tint = MistWhite, modifier = Modifier.size(34.dp)) }
-                Box(Modifier.size(75.dp).clip(CircleShape).background(MistWhite).clickable(onClick = onPlay), contentAlignment = Alignment.Center) {
+                IconButton(onClick = onShuffle, modifier = Modifier.size(if (narrow) 44.dp else 48.dp)) { Icon(Icons.Rounded.Shuffle, "Shuffle", tint = if (shuffle) Lavender else SoftText, modifier = Modifier.size(21.dp)) }
+                IconButton(onClick = onPrevious, modifier = Modifier.size(if (narrow) 50.dp else 58.dp)) { Icon(Icons.Rounded.SkipPrevious, "Previous", tint = MistWhite, modifier = Modifier.size(34.dp)) }
+                Box(Modifier.size(if (narrow) 68.dp else 75.dp).clip(CircleShape).background(MistWhite).clickable(onClick = onPlay), contentAlignment = Alignment.Center) {
                     Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, "Play or pause", tint = LazyNight, modifier = Modifier.size(38.dp))
                 }
-                IconButton(onClick = onNext, modifier = Modifier.size(58.dp)) { Icon(Icons.Rounded.SkipNext, "Next", tint = MistWhite, modifier = Modifier.size(34.dp)) }
-                IconButton(onClick = onRepeat) {
+                IconButton(onClick = onNext, modifier = Modifier.size(if (narrow) 50.dp else 58.dp)) { Icon(Icons.Rounded.SkipNext, "Next", tint = MistWhite, modifier = Modifier.size(34.dp)) }
+                IconButton(onClick = onRepeat, modifier = Modifier.size(if (narrow) 44.dp else 48.dp)) {
                     Icon(if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat, "Repeat", tint = if (repeatMode == Player.REPEAT_MODE_OFF) SoftText else Lavender, modifier = Modifier.size(21.dp))
                 }
             }

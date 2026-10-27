@@ -21,14 +21,25 @@ val Lavender = Color(0xFFD3BFFF)
 /** Intentional light-rimmed translucency; ambient artwork below produces frosted depth. */
 fun Modifier.glass(radius: Int = 26, bright: Boolean = false): Modifier {
     val shape = RoundedCornerShape(radius.dp)
+    // Restrained glass: shaded body, specular rim and an inner highlight.
+    // Artwork is softened once underneath; each control stays a cheap drawing.
     return this.clip(shape)
         .background(
             Brush.linearGradient(
-                if (bright) listOf(Color.White.copy(alpha = 0.23f), Color.White.copy(alpha = 0.13f), Color.White.copy(alpha = 0.09f))
-                else listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.075f), Color.White.copy(alpha = 0.05f))
+                if (bright) listOf(Color(0xFF776788).copy(alpha = 0.52f), Color(0xFF201D30).copy(alpha = 0.82f))
+                else listOf(Color(0xFF554A66).copy(alpha = 0.42f), Color(0xFF1A1828).copy(alpha = 0.71f))
             )
         )
-        .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = 0.38f), Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.16f))), shape)
+        .background(
+            Brush.verticalGradient(
+                listOf(Color.White.copy(alpha = if (bright) 0.18f else 0.12f), Color.Transparent, Color.Black.copy(alpha = 0.10f))
+            )
+        )
+        .border(
+            1.dp,
+            Brush.linearGradient(listOf(Color.White.copy(alpha = 0.55f), Lavender.copy(alpha = 0.17f), Color.White.copy(alpha = 0.10f))),
+            shape
+        )
 }
 
 @Composable

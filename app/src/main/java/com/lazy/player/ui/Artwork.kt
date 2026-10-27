@@ -31,7 +31,7 @@ import kotlinx.coroutines.withContext
 /** Bounded bitmap cache; playback never waits for artwork decoding. */
 private object CoverCache {
     private val missing = LinkedHashSet<Long>()
-    private val cache = object : LruCache<Long, Bitmap>(12 * 1024) {
+    private val cache = object : LruCache<Long, Bitmap>(24 * 1024) {
         override fun sizeOf(key: Long, value: Bitmap): Int = value.byteCount / 1024
     }
 
@@ -55,7 +55,7 @@ private object CoverCache {
             while (bounds.outWidth / sample > 700 || bounds.outHeight / sample > 700) sample *= 2
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply {
                 inSampleSize = sample
-                inPreferredConfig = Bitmap.Config.RGB_565
+                inPreferredConfig = Bitmap.Config.ARGB_8888
             })
             }
         } catch (_: Exception) {
