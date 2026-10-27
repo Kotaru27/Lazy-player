@@ -227,7 +227,7 @@ private fun MissingCover(track: AudioTrack?, targetPx: Int, showCaption: Boolean
                 tint = Color.White.copy(alpha = 0.80f), modifier = Modifier.size(19.dp))
         } else {
             Text(
-                albumName.firstOrNull()?.uppercaseChar()?.toString() ?: "♪",
+                albumName.trim().substringAfterLast(' ').take(1).uppercase() ?: "♪",
                 modifier = Modifier.align(Alignment.Center),
                 fontSize = 88.sp, fontWeight = FontWeight.Light,
                 color = Color.White.copy(alpha = 0.81f)
