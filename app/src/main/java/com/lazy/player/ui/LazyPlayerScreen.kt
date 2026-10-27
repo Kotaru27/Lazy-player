@@ -624,84 +624,83 @@ private fun UnifiedDock(
     canNext: Boolean, canPrevious: Boolean,
     onSwipeNext: () -> Unit, onSwipePrevious: () -> Unit
 ) {
-    val tint = rememberArtworkTint(track)
-    val shape = RoundedCornerShape(24.dp)
-    // No repeated album bitmap blurs or full-width row dividers in the dock:
-    // one bounded surface and one artwork-derived, low-saturation light source.
-    Box(
-        Modifier.fillMaxWidth().padding(horizontal = 17.dp)
-            .animateContentSize(
-                animationSpec = if (reduceMotion) snap() else spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                )
-            )
-            .shadow(8.dp, shape, clip = false)
-            .clip(shape)
-            .background(Color(0xE9101319))
-            .background(
-                Brush.linearGradient(
-                    listOf(
-                        tint.copy(alpha = 0.18f),
-                        Color(0xFF15171D).copy(alpha = 0.24f),
-                        Color.Transparent
-                    )
-                )
-            )
-            .glass(radius = 24, bright = true)
-            .testTag("unified-dock")
+    val tint by animateColorAsState(
+        targetValue = rememberArtworkTint(track),
+        animationSpec = tween(if (reduceMotion) 0 else 220),
+        label = "mini-ambient-tint"
+    )
+    // Two genuinely floating surfaces: one focused playback island, one
+    // separate collection dock. No dummy divider or opaque monolithic toolbar.
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 17.dp).testTag("unified-dock"),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Column(Modifier.fillMaxWidth()) {
-            if (track != null) {
-                Box(Modifier.fillMaxWidth().height(62.dp)) {
-                    Row(
-                        Modifier.fillMaxSize().padding(start = 9.dp, end = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TrackMotionSurface(
-                            track = track, previous = previous, next = next,
-                            canNext = canNext, canPrevious = canPrevious,
-                            reduceMotion = reduceMotion,
-                            onNext = onSwipeNext, onPrevious = onSwipePrevious,
-                            modifier = Modifier.weight(1f).fillMaxHeight()
-                                .clickable(onClick = onOpen),
-                            tag = "mini-swipe-zone"
-                        ) { displayed ->
-                            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(45.dp).clip(RoundedCornerShape(12.dp))) {
-                                    Artwork(displayed, Modifier.fillMaxSize(), 12.dp, targetPx = 192)
-                                    if (displayed.id == track.id) DockProgress(
-                                        positionState = positionState,
-                                        duration = duration,
-                                        playing = playing,
-                                        modifier = Modifier.align(Alignment.BottomCenter)
-                                            .padding(horizontal = 4.dp)
-                                    )
-                                }
-                                Spacer(Modifier.width(11.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(displayed.title, fontSize = 13.sp, color = MistWhite,
-                                        fontWeight = FontWeight.SemiBold, maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis)
-                                    Spacer(Modifier.height(4.dp))
-                                    Text(displayed.artist, color = SoftText, fontSize = 11.sp,
-                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                }
-                            }
+        if (track != null) {
+            val shape = RoundedCornerShape(23.dp)
+            Row(
+                Modifier.fillMaxWidth().height(70.dp)
+                    .shadow(13.dp, shape, clip = false)
+                    .clip(shape)
+                    .background(Color(0xF0171D23))
+                    .background(Brush.linearGradient(listOf(
+                        tint.copy(alpha = 0.24f),
+                        Color(0xFF2C363F).copy(alpha = 0.22f),
+                        Color.Transparent
+                    )))
+                    .glass(radius = 23, bright = true)
+                    .padding(start = 10.dp, end = 5.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TrackMotionSurface(
+                    track = track, previous = previous, next = next,
+                    canNext = canNext, canPrevious = canPrevious,
+                    reduceMotion = reduceMotion,
+                    onNext = onSwipeNext, onPrevious = onSwipePrevious,
+                    modifier = Modifier.weight(1f).fillMaxHeight()
+                        .clickable(onClick = onOpen),
+                    tag = "mini-swipe-zone"
+                ) { displayed ->
+                    Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(48.dp).clip(RoundedCornerShape(13.dp))) {
+                            Artwork(displayed, Modifier.fillMaxSize(), 13.dp, targetPx = 192)
+                            if (displayed.id == track.id) DockProgress(
+                                positionState = positionState, duration = duration,
+                                playing = playing,
+                                modifier = Modifier.align(Alignment.BottomCenter)
+                                    .padding(horizontal = 5.dp)
+                            )
                         }
-                        IconButton(onClick = onPlay, modifier = Modifier.size(48.dp)) {
-                            Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                                if (playing) "Pause" else "Play", tint = MistWhite,
-                                modifier = Modifier.size(24.dp))
-                        }
-                        IconButton(onClick = onNext, enabled = canNext, modifier = Modifier.size(48.dp)) {
-                            Icon(Icons.Rounded.SkipNext, "Next track",
-                                tint = if (canNext) MistWhite else SoftText.copy(alpha = 0.45f),
-                                modifier = Modifier.size(23.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(displayed.title, fontSize = 14.sp, color = MistWhite,
+                                fontWeight = FontWeight.SemiBold, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis)
+                            Spacer(Modifier.height(4.dp))
+                            Text(displayed.artist, color = SoftText, fontSize = 12.sp,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
+                IconButton(onClick = onPlay, modifier = Modifier.size(48.dp)) {
+                    Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                        if (playing) "Pause" else "Play", tint = MistWhite,
+                        modifier = Modifier.size(25.dp))
+                }
+                IconButton(onClick = onNext, enabled = canNext, modifier = Modifier.size(46.dp)) {
+                    Icon(Icons.Rounded.SkipNext, "Next track",
+                        tint = if (canNext) MistWhite else SoftText.copy(alpha = 0.42f),
+                        modifier = Modifier.size(24.dp))
+                }
             }
+        }
+        val shape = RoundedCornerShape(22.dp)
+        Box(
+            Modifier.fillMaxWidth().height(56.dp)
+                .shadow(10.dp, shape, clip = false)
+                .clip(shape)
+                .background(Color(0xE91B2229))
+                .glass(radius = 22, bright = true)
+        ) {
             DockTabs(grouping, onGroup, reduceMotion)
         }
     }
@@ -715,7 +714,10 @@ private fun DockTabs(grouping: Grouping, onGroup: (Grouping) -> Unit, reduceMoti
             .padding(start = if (largeFont) 8.dp else 12.dp, end = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(Modifier.width(if (largeFont) 48.dp else 77.dp),
+        Row(Modifier.width(if (largeFont) 48.dp else 77.dp)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(onClick = { onGroup(Grouping.Songs) }),
             verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.LibraryMusic,
                 contentDescription = if (largeFont) "Library" else null,
