@@ -4,6 +4,8 @@ on:
     branches: ['redesign/**']
     paths:
       - 'app/src/androidTest/**'
+      - 'app/build.gradle.kts'
+      - 'app/src/main/java/com/lazy/player/ui/**'
       - 'tools/v05-emulator.sh'
       - '.github/workflows/v05-ui-audit.yml'
   workflow_dispatch:
