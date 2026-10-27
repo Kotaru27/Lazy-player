@@ -43,6 +43,7 @@ private enum class Grouping { Songs, Albums, Artists }
 fun LazyPlayerScreen(
     tracks: List<AudioTrack>,
     hasPermission: Boolean,
+    libraryLoading: Boolean,
     onPermission: () -> Unit,
     currentTrack: AudioTrack?,
     playing: Boolean,
@@ -146,13 +147,14 @@ fun LazyPlayerScreen(
                             Spacer(Modifier.height(25.dp))
                         }
                     } else {
-                        Text(if (selectedGroup!!.first == Grouping.Albums) filtered.firstOrNull()?.album.orEmpty() else selectedGroup!!.second, modifier = Modifier.padding(horizontal = 26.dp), fontSize = 32.sp, color = MistWhite, fontWeight = FontWeight.Light)
+                        Text(if (selectedGroup!!.first == Grouping.Albums) tracks.firstOrNull { albumKey(it) == selectedGroup!!.second }?.album ?: "Album" else selectedGroup!!.second, modifier = Modifier.padding(horizontal = 26.dp), fontSize = 32.sp, color = MistWhite, fontWeight = FontWeight.Light)
                         Spacer(Modifier.height(8.dp))
                         Text("${filtered.size} tracks", modifier = Modifier.padding(horizontal = 27.dp), fontSize = 13.sp, color = SoftText)
                         Spacer(Modifier.height(22.dp))
                     }
                     when {
                         !hasPermission -> IntroState(onPermission)
+                        libraryLoading && tracks.isEmpty() -> LoadingLibrary()
                         tracks.isEmpty() -> EmptyLibrary(onRefresh)
                         filtered.isEmpty() -> NoResults(page == Page.Liked)
                         selectedGroup == null && page == Page.Listen && grouping != Grouping.Songs -> {
@@ -241,6 +243,15 @@ private fun IntroState(onPermission: () -> Unit) {
         Box(Modifier.clip(CircleShape).background(MistWhite).clickable(onClick = onPermission).padding(horizontal = 26.dp, vertical = 16.dp)) {
             Text("Open my library", color = LazyNight, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         }
+    }
+}
+
+@Composable
+private fun LoadingLibrary() {
+    Column(Modifier.fillMaxWidth().fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        CircularProgressIndicator(modifier = Modifier.size(27.dp), color = Lavender, strokeWidth = 2.dp)
+        Spacer(Modifier.height(18.dp))
+        Text("Finding your music…", color = SoftText, fontSize = 14.sp)
     }
 }
 

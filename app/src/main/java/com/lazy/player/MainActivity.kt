@@ -63,13 +63,23 @@ private fun LazyPlayerApplication() {
     var granted by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }
     var tracks by remember { mutableStateOf<List<AudioTrack>>(emptyList()) }
+    var libraryLoading by remember { mutableStateOf(granted) }
     var refreshTick by remember { mutableIntStateOf(0) }
     var controller by remember { mutableStateOf<MediaController?>(null) }
     var state by remember { mutableStateOf(PlayerView()) }
     var queueRevision by remember { mutableIntStateOf(0) }
     var favorites by remember { mutableStateOf(Favorites(context).ids()) }
 
-    LaunchedEffect(granted, refreshTick) { tracks = if (granted) MusicLibrary.read(context) else emptyList() }
+    LaunchedEffect(granted, refreshTick) {
+        if (!granted) {
+            tracks = emptyList()
+            libraryLoading = false
+        } else {
+            if (tracks.isEmpty()) libraryLoading = true
+            try { tracks = MusicLibrary.read(context) }
+            finally { libraryLoading = false }
+        }
+    }
     DisposableEffect(lifecycleOwner, granted) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -118,9 +128,19 @@ private fun LazyPlayerApplication() {
     }
 
     val currentTrack = tracks.firstOrNull { it.id.toString() == state.mediaId }
+    // Preserve real Media3 timeline indices even when removed files are hidden.
+    val queueEntries = remember(state.mediaId, tracks, queueRevision, controller) {
+        controller?.let { c ->
+            val byId = tracks.associateBy { it.id.toString() }
+            (0 until c.mediaItemCount).mapNotNull { index ->
+                byId[c.getMediaItemAt(index).mediaId]?.let { index to it }
+            }
+        }.orEmpty()
+    }
     LazyPlayerScreen(
         tracks = tracks,
         hasPermission = granted,
+        libraryLoading = libraryLoading,
         onPermission = { permissionLauncher.launch(permission) },
         currentTrack = currentTrack,
         playing = state.playing,
@@ -158,15 +178,10 @@ private fun LazyPlayerApplication() {
                 }
             }
         },
-        queue = remember(state.mediaId, tracks, queueRevision) {
-            controller?.let { c ->
-                (0 until c.mediaItemCount).mapNotNull { i ->
-                    val id = c.getMediaItemAt(i).mediaId
-                    tracks.firstOrNull { it.id.toString() == id }
-                }
-            }.orEmpty()
+        queue = queueEntries.map { it.second },
+        onQueueSelection = { index ->
+            queueEntries.getOrNull(index)?.let { item -> controller?.seekToDefaultPosition(item.first) }
         },
-        onQueueSelection = { index -> controller?.seekToDefaultPosition(index) },
         onToggleFavorite = { id -> favorites = Favorites(context).toggle(id) }
     )
 }
