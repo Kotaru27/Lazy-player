@@ -193,6 +193,28 @@ class LazyPlayerUiTest {
         rule.onAllNodes(hasText("Artist One", substring = true)).onFirst().assertExists()
     }
 
+    @Test fun dockSelectionAndPlayerOpenCloseStayConsistent() {
+        show()
+        rule.onNodeWithTag("unified-dock").assertExists()
+        // Repeated requests must always leave one selected collection.
+        repeat(4) {
+            rule.onNodeWithTag("dock-tab-albums").performClick()
+            rule.onNodeWithTag("dock-tab-artists").performClick()
+            rule.onNodeWithTag("dock-tab-songs").performClick()
+        }
+        rule.onNodeWithContentDescription("Play all 3 songs").assertExists()
+        save("05-compact-dock")
+        rule.onNodeWithTag("mini-swipe-zone").performClick()
+        rule.onNodeWithTag("now-artwork-swipe-zone").assertExists()
+        rule.onNodeWithContentDescription("Close Now Playing").performClick()
+        rule.onNodeWithTag("dock-tabs").assertExists()
+        rule.runOnIdle {
+            assertEquals(0, toggles)
+            assertEquals(0, previousSwipes)
+            assertEquals(0, nextSwipes)
+        }
+    }
+
     @Test fun queueBoundariesIgnoreGestures() {
         show(active = songs[0], canNext = false, canPrevious = false)
         rule.onNodeWithTag("mini-swipe-zone").performTouchInput { swipeLeft() }

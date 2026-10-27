@@ -7,6 +7,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import kotlinx.coroutines.Job
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
@@ -43,6 +44,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
@@ -117,7 +120,7 @@ fun LazyPlayerScreen(
     BackHandler(enabled = fullPlayer && !showQueue) { fullPlayer = false }
     BackHandler(enabled = selectedGroup != null && !fullPlayer) { selectedGroup = null }
 
-    val filtered = remember(tracks, query, page, favorites, grouping, selectedGroup) {
+    val filtered = remember(tracks, query, page, favorites, selectedGroup) {
         var result = if (page == Page.Liked) tracks.filter { it.id in favorites } else tracks
         if (selectedGroup != null) {
             val (type, name) = selectedGroup!!
@@ -258,12 +261,14 @@ fun LazyPlayerScreen(
             }
             AnimatedVisibility(
                 visible = fullPlayer && currentTrack != null,
+                // Only translate a short distance and fade: avoid scaling the full-screen
+                // blurred artwork, which allocates an expensive composited render layer.
                 enter = if (reduceMotion) fadeIn(tween(0))
-                    else slideInVertically(initialOffsetY = { it / 6 }, animationSpec = tween(280)) +
-                        scaleIn(initialScale = 0.96f, animationSpec = tween(280)) + fadeIn(tween(240)),
+                    else slideInVertically(initialOffsetY = { it / 14 }, animationSpec = tween(225)) +
+                        fadeIn(tween(185)),
                 exit = if (reduceMotion) fadeOut(tween(0))
-                    else slideOutVertically(targetOffsetY = { it / 6 }, animationSpec = tween(225)) +
-                        scaleOut(targetScale = 0.97f, animationSpec = tween(225)) + fadeOut(tween(185))
+                    else slideOutVertically(targetOffsetY = { it / 14 }, animationSpec = tween(190)) +
+                        fadeOut(tween(165))
             ) {
                 currentTrack?.let { track ->
                     NowPlaying(
@@ -565,47 +570,69 @@ private fun UnifiedDock(
     onSwipeNext: () -> Unit, onSwipePrevious: () -> Unit
 ) {
     val tint = rememberArtworkTint(track)
-    Box(Modifier.fillMaxWidth().padding(horizontal = 17.dp)
-        .shadow(9.dp, RoundedCornerShape(26.dp), clip = false)
-        .clip(RoundedCornerShape(26.dp))) {
-        // One bounded artwork-light source; content itself is never blurred.
-        // This is the compatible opal fallback, not live backdrop capture.
-        if (track != null) {
-            Artwork(track, Modifier.matchParentSize(), 26.dp, blurred = true, targetPx = 192)
-            Box(Modifier.matchParentSize().background(tint.copy(alpha = 0.10f)))
-        }
-        Box(Modifier.matchParentSize().background(Color(0xE70F1216)))
-        Box(Modifier.matchParentSize().glass(26, bright = true))
+    val shape = RoundedCornerShape(24.dp)
+    // No repeated album bitmap blurs or full-width row dividers in the dock:
+    // one bounded surface and one artwork-derived, low-saturation light source.
+    Box(
+        Modifier.fillMaxWidth().padding(horizontal = 17.dp)
+            .shadow(8.dp, shape, clip = false)
+            .clip(shape)
+            .background(Color(0xE9101319))
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        tint.copy(alpha = 0.18f),
+                        Color(0xFF15171D).copy(alpha = 0.24f),
+                        Color.Transparent
+                    )
+                )
+            )
+            .glass(radius = 24, bright = true)
+            .testTag("unified-dock")
+    ) {
         Column(Modifier.fillMaxWidth()) {
             if (track != null) {
-                Row(Modifier.fillMaxWidth().height(64.dp).padding(start = 9.dp, end = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Row(Modifier.weight(1f).fillMaxHeight().testTag("mini-swipe-zone")
-                        .trackSwipe(track.id, canNext, canPrevious, onSwipeNext, onSwipePrevious)
-                        .clickable(onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
-                        Artwork(track, Modifier.size(46.dp), 11.dp, targetPx = 192)
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(track.title, fontSize = 13.sp, color = MistWhite,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Spacer(Modifier.height(3.dp))
-                            Text(track.artist, color = SoftText, fontSize = 11.sp,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Box(Modifier.fillMaxWidth().height(62.dp)) {
+                    Row(
+                        Modifier.fillMaxSize().padding(start = 9.dp, end = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            Modifier.weight(1f).fillMaxHeight().testTag("mini-swipe-zone")
+                                .trackSwipe(track.id, canNext, canPrevious, onSwipeNext, onSwipePrevious)
+                                .clickable(onClick = onOpen),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Artwork(track, Modifier.size(45.dp), 12.dp, targetPx = 192)
+                            Spacer(Modifier.width(11.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(track.title, fontSize = 13.sp, color = MistWhite,
+                                    fontFamily = FontFamily.SansSerif,
+                                    fontWeight = FontWeight.SemiBold, maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis)
+                                Spacer(Modifier.height(4.dp))
+                                Text(track.artist, color = SoftText, fontSize = 11.sp,
+                                    fontFamily = FontFamily.SansSerif, maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                        IconButton(onClick = onPlay, modifier = Modifier.size(48.dp)) {
+                            Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                if (playing) "Pause" else "Play", tint = MistWhite,
+                                modifier = Modifier.size(24.dp))
+                        }
+                        IconButton(onClick = onNext, enabled = canNext, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Rounded.SkipNext, "Next track",
+                                tint = if (canNext) MistWhite else SoftText.copy(alpha = 0.45f),
+                                modifier = Modifier.size(23.dp))
                         }
                     }
-                    IconButton(onClick = onPlay, modifier = Modifier.size(48.dp)) {
-                        Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                            if (playing) "Pause" else "Play", tint = MistWhite,
-                            modifier = Modifier.size(25.dp))
-                    }
-                    IconButton(onClick = onNext, enabled = canNext, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Rounded.SkipNext, "Next track",
-                            tint = if (canNext) MistWhite else SoftText.copy(alpha = 0.45f),
-                            modifier = Modifier.size(24.dp))
-                    }
+                    DockProgress(
+                        positionState = positionState, duration = duration,
+                        playing = playing, modifier = Modifier.align(Alignment.BottomCenter)
+                            .padding(horizontal = 17.dp)
+                    )
                 }
-                DockProgress(positionState, duration, playing)
             }
             DockTabs(grouping, onGroup, reduceMotion)
         }
@@ -614,35 +641,56 @@ private fun UnifiedDock(
 
 @Composable
 private fun DockTabs(grouping: Grouping, onGroup: (Grouping) -> Unit, reduceMotion: Boolean) {
-    Row(Modifier.fillMaxWidth().height(57.dp).padding(horizontal = 9.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.width(if (LocalDensity.current.fontScale > 1.5f) 70.dp else 83.dp),
+    Row(
+        Modifier.fillMaxWidth().height(52.dp).padding(start = 12.dp, end = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(Modifier.width(if (LocalDensity.current.fontScale > 1.45f) 69.dp else 77.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.LibraryMusic, null, tint = SoftText, modifier = Modifier.size(15.dp))
+            Icon(Icons.Rounded.LibraryMusic, contentDescription = null, tint = SoftText,
+                modifier = Modifier.size(17.dp))
             Spacer(Modifier.width(5.dp))
-            Text("Library", color = SoftText, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+            Text("Library", color = SoftText, fontSize = 11.sp,
+                fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        BoxWithConstraints(Modifier.weight(1f).heightIn(min = 49.dp).testTag("dock-tabs")) {
+        BoxWithConstraints(Modifier.weight(1f).height(48.dp).testTag("dock-tabs")) {
             val segment = maxWidth / 3
-            val selected = Grouping.entries.indexOf(grouping).coerceAtLeast(0)
-            val x by animateDpAsState(targetValue = segment * selected,
-                animationSpec = if (reduceMotion) snap() else tween(
-                    durationMillis = 210, easing = FastOutSlowInEasing
-                ), label = "moving-dock-highlight")
-            Box(Modifier.offset(x = x).width(segment).height(45.dp)
-                .clip(RoundedCornerShape(15.dp))
-                .background(Brush.verticalGradient(
-                    listOf(Color.White.copy(alpha = 0.18f), Color.White.copy(alpha = 0.055f))
-                )))
+            val target = segment * Grouping.entries.indexOf(grouping).coerceAtLeast(0)
+            // Placement is a render-layer translation, not remeasurement on each
+            // animation frame. animateDpAsState re-targets rapid taps automatically.
+            val translation = animateDpAsState(
+                targetValue = target,
+                animationSpec = if (reduceMotion) snap()
+                    else spring(stiffness = Spring.StiffnessMedium,
+                        dampingRatio = Spring.DampingRatioNoBouncy),
+                label = "dock-selection-motion"
+            )
+            Box(Modifier.width(segment).height(47.dp).graphicsLayer {
+                translationX = translation.value.toPx()
+            }, contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxWidth(0.88f).height(35.dp)
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(
+                        Brush.verticalGradient(listOf(
+                            Color.White.copy(alpha = 0.115f),
+                            Color.White.copy(alpha = 0.045f)
+                        ))
+                    )
+                    .border(0.5.dp, Color.White.copy(alpha = 0.10f),
+                        RoundedCornerShape(13.dp)))
+            }
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                 Grouping.entries.forEach { tab ->
                     Box(Modifier.weight(1f).fillMaxHeight()
                         .testTag("dock-tab-${tab.name.lowercase()}")
-                        .clickable(onClick = { onGroup(tab) }),
+                        .clickable(onClick = { if (tab != grouping) onGroup(tab) }),
                         contentAlignment = Alignment.Center) {
                         Text(tab.name, color = if (grouping == tab) MistWhite else SoftText,
-                            fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            fontWeight = if (grouping == tab) FontWeight.SemiBold else FontWeight.Medium)
+                            fontSize = 12.sp, fontFamily = FontFamily.SansSerif,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            fontWeight = if (grouping == tab)
+                                FontWeight.SemiBold else FontWeight.Medium)
                     }
                 }
             }
@@ -651,14 +699,26 @@ private fun DockTabs(grouping: Grouping, onGroup: (Grouping) -> Unit, reduceMoti
 }
 
 @Composable
-private fun DockProgress(positionState: State<Long>, duration: Long, playing: Boolean) {
-    val reduceMotion = rememberReducedMotion()
-    val progress = if (duration > 0L) positionState.value.toFloat() / duration else 0f
-    val fraction by animateFloatAsState(progress.coerceIn(0f, 1f),
-        animationSpec = tween(if (!reduceMotion && playing) 490 else 0, easing = LinearEasing), label = "dock-progress")
-    Box(Modifier.fillMaxWidth().height(2.dp).background(Color.White.copy(alpha = 0.08f))) {
-        Box(Modifier.fillMaxWidth(fraction).fillMaxHeight().background(MistWhite.copy(alpha = 0.82f)))
-    }
+private fun DockProgress(
+    positionState: State<Long>, duration: Long, playing: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val reduced = rememberReducedMotion()
+    // State updates are read in this tiny composable only, not in the list or tabs.
+    val current = if (duration > 0L) positionState.value.toFloat() / duration else 0f
+    val animated = animateFloatAsState(
+        targetValue = current.coerceIn(0f, 1f),
+        animationSpec = tween(if (playing && !reduced) 440 else 0, easing = LinearEasing),
+        label = "mini-track-progress"
+    )
+    Box(modifier.fillMaxWidth().height(1.5.dp).drawBehind {
+        drawRect(Color.White.copy(alpha = 0.095f))
+        drawRect(MistWhite.copy(alpha = 0.68f),
+            size = androidx.compose.ui.geometry.Size(
+                width = size.width * animated.value.coerceIn(0f, 1f),
+                height = size.height
+            ))
+    })
 }
 
 
@@ -673,52 +733,118 @@ private fun Modifier.trackSwipe(
     onNext: () -> Unit, onPrevious: () -> Unit
 ): Modifier = composed {
     val scope = rememberCoroutineScope()
-    val reduceMotion = rememberReducedMotion()
+    val reduced = rememberReducedMotion()
     val density = LocalDensity.current
-    val threshold = with(density) { 72.dp.toPx() }
-    val displacement = remember(trackId) { Animatable(0f) }
+    val commitThreshold = with(density) { 72.dp.toPx() }
+    val clamp = with(density) { 92.dp.toPx() }
+    var displacement by remember(trackId) { mutableFloatStateOf(0f) }
+    var resetJob by remember(trackId) { mutableStateOf<Job?>(null) }
     val nextState = rememberUpdatedState(onNext)
     val previousState = rememberUpdatedState(onPrevious)
-    this.offset { IntOffset(displacement.value.roundToInt(), 0) }
-        .pointerInput(trackId, canNext, canPrevious) {
+
+    // Pointer moves change one graphics layer translation immediately, rather
+    // than launching dozens of snapTo coroutines during a single swipe.
+    this.graphicsLayer { translationX = displacement }
+        .pointerInput(trackId, canNext, canPrevious, reduced) {
             var drag = 0f
-            val clampPx = with(density) { 96.dp.toPx() }
             detectHorizontalDragGestures(
-                onDragStart = { drag = 0f },
+                onDragStart = {
+                    resetJob?.cancel()
+                    drag = 0f
+                },
                 onHorizontalDrag = { event, amount ->
                     drag += amount
+                    displacement = drag.coerceIn(-clamp, clamp)
                     event.consume()
-                    scope.launch { displacement.snapTo(drag.coerceIn(-clampPx, clampPx)) }
                 },
                 onDragEnd = {
-                    when (TrackSwipe.decide(drag, 0f, threshold, canNext, canPrevious)) {
+                    when (TrackSwipe.decide(
+                        drag, 0f, commitThreshold, canNext, canPrevious
+                    )) {
                         SwipeTrackAction.NEXT -> nextState.value()
                         SwipeTrackAction.PREVIOUS -> previousState.value()
                         SwipeTrackAction.NONE -> Unit
                     }
-                    scope.launch {
-                        if (reduceMotion) displacement.snapTo(0f)
-                        else displacement.animateTo(0f,
-                            spring(dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = Spring.StiffnessMedium))
+                    resetJob?.cancel()
+                    if (reduced) displacement = 0f
+                    else resetJob = scope.launch {
+                        val start = displacement
+                        Animatable(start).animateTo(
+                            targetValue = 0f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            )
+                        ) { displacement = value }
                     }
                 },
                 onDragCancel = {
-                    scope.launch {
-                        if (reduceMotion) displacement.snapTo(0f)
-                        else displacement.animateTo(0f, spring())
+                    resetJob?.cancel()
+                    if (reduced) displacement = 0f
+                    else resetJob = scope.launch {
+                        Animatable(displacement).animateTo(0f, spring()) {
+                            displacement = value
+                        }
                     }
                 }
             )
         }
 }
 
-
 private fun albumKey(track: AudioTrack): String = if (track.albumId > 0) "album:${track.albumId}" else "${track.album}|${track.artist}"
 
 private fun durationString(ms: Long): String {
     val seconds = ms.coerceAtLeast(0) / 1000
     return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PlayerTimeline(
+    trackId: Long,
+    positionState: State<Long>,
+    duration: Long,
+    playing: Boolean,
+    onSeek: (Long) -> Unit
+) {
+    // Playback ticks invalidate only this seekbar, not the artwork, background,
+    // transport controls or Now Playing's root layout.
+    val reduced = rememberReducedMotion()
+    var draggedFraction by remember(trackId) { mutableStateOf<Float?>(null) }
+    val sample = if (duration > 0L)
+        (positionState.value.toFloat() / duration).coerceIn(0f, 1f) else 0f
+    val animated = animateFloatAsState(
+        targetValue = sample,
+        animationSpec = tween(if (playing && !reduced) 440 else 0, easing = LinearEasing),
+        label = "isolated-seek-progress"
+    )
+    val fraction = (draggedFraction ?: animated.value).coerceIn(0f, 1f)
+    Slider(
+        value = fraction,
+        onValueChange = { draggedFraction = it },
+        onValueChangeFinished = {
+            if (duration > 0L) {
+                onSeek(((draggedFraction ?: fraction) * duration).roundToLong())
+            }
+            draggedFraction = null
+        },
+        enabled = duration > 0L,
+        modifier = Modifier.fillMaxWidth().height(48.dp),
+        thumb = { Box(Modifier.size(10.dp).clip(CircleShape).background(MistWhite)) },
+        track = { state ->
+            Box(Modifier.fillMaxWidth().height(3.dp).clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.21f))) {
+                Box(Modifier.fillMaxWidth(state.value.coerceIn(0f, 1f))
+                    .fillMaxHeight().background(MistWhite))
+            }
+        }
+    )
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(durationString((fraction * duration).roundToLong()),
+            color = SoftText, fontSize = 11.sp, fontFamily = FontFamily.SansSerif)
+        Text(durationString(duration),
+            color = SoftText, fontSize = 11.sp, fontFamily = FontFamily.SansSerif)
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -747,15 +873,6 @@ private fun NowPlaying(
     onSwipePrevious: () -> Unit,
 ) {
     val tint = rememberArtworkTint(track)
-    val reduceMotion = rememberReducedMotion()
-    var draggedFraction by remember(track.id) { mutableStateOf<Float?>(null) }
-    val sampledFraction = (if (duration > 0L) positionState.value.toFloat() / duration else 0f).coerceIn(0f, 1f)
-    val smoothFraction by animateFloatAsState(
-        targetValue = sampledFraction,
-        animationSpec = tween(if (!reduceMotion && playing) 490 else 0, easing = LinearEasing),
-        label = "now-playing-progress"
-    )
-    val fraction = (draggedFraction ?: smoothFraction).coerceIn(0f, 1f)
     BoxWithConstraints(Modifier.fillMaxSize().background(LazyNight)) {
         val fontScale = LocalDensity.current.fontScale
         val compact = maxHeight < 750.dp || fontScale > 1.35f
@@ -842,31 +959,13 @@ private fun NowPlaying(
                     color = SoftText, fontSize = 11.sp)
             }
             Spacer(Modifier.height((if (compact) 8.dp else 14.dp) + air))
-            // A thin rail and small thumb inside the normal 48dp Material3 touch area.
-            Slider(
-                value = fraction,
-                onValueChange = { draggedFraction = it },
-                onValueChangeFinished = {
-                    if (duration > 0L) {
-                        onSeek(((draggedFraction ?: fraction) * duration).roundToLong())
-                    }
-                    draggedFraction = null
-                },
-                enabled = duration > 0L,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                thumb = { Box(Modifier.size(11.dp).clip(CircleShape).background(MistWhite)) },
-                track = { state ->
-                    Box(Modifier.fillMaxWidth().height(3.dp).clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.23f))) {
-                        Box(Modifier.fillMaxWidth(state.value.coerceIn(0f, 1f)).fillMaxHeight()
-                            .background(MistWhite))
-                    }
-                }
+            PlayerTimeline(
+                trackId = track.id,
+                positionState = positionState,
+                duration = duration,
+                playing = playing,
+                onSeek = onSeek
             )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(durationString((fraction * duration).roundToLong()), color = SoftText, fontSize = 11.sp)
-                Text(durationString(duration), color = SoftText, fontSize = 11.sp)
-            }
             Spacer(Modifier.height(if (compact) 14.dp else 20.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically) {
