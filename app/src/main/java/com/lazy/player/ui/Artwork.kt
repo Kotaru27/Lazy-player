@@ -36,7 +36,7 @@ private object CoverCache {
     }
 
     fun read(context: Context, track: AudioTrack): Bitmap? {
-        val key = if (track.albumId > 0) track.albumId else -track.id
+        val key = if (track.id < 0) track.id else if (track.albumId > 0) track.albumId else -track.id
         synchronized(cache) {
             cache.get(key)?.let { return it }
             if (key in missing) return null
@@ -80,9 +80,9 @@ fun Artwork(track: AudioTrack?, modifier: Modifier = Modifier, corner: Dp = 18.d
     val tint = accentFor(track?.id ?: 42)
     Box(
         modifier = modifier
-            .then(if (blurred) Modifier.blur(38.dp) else Modifier)
+            .then(if (blurred) Modifier.blur(26.dp) else Modifier)
             .clip(RoundedCornerShape(corner))
-            .background(Brush.linearGradient(listOf(tint.copy(alpha = 0.82f), Color(0xFF28233F), Color(0xFF10121C)))),
+            .background(Brush.linearGradient(listOf(tint.copy(alpha = 0.82f), Color(0xFF293A46), Color(0xFF0F1921)))),
         contentAlignment = Alignment.Center
     ) {
         if (bitmap != null) {
@@ -94,9 +94,9 @@ fun Artwork(track: AudioTrack?, modifier: Modifier = Modifier, corner: Dp = 18.d
 }
 
 private fun accentFor(id: Long): Color = when ((id and Long.MAX_VALUE) % 5L) {
-    0L -> Color(0xFF8A75BD)
-    1L -> Color(0xFF677EAA)
-    2L -> Color(0xFFB67D9E)
-    3L -> Color(0xFF729A99)
-    else -> Color(0xFFAC8A78)
+    0L -> Color(0xFF7B94A1)
+    1L -> Color(0xFF66899B)
+    2L -> Color(0xFF8997A5)
+    3L -> Color(0xFF68999D)
+    else -> Color(0xFF8C97A2)
 }
