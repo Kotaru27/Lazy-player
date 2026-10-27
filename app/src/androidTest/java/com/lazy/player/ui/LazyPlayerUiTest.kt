@@ -58,7 +58,8 @@ class LazyPlayerUiTest {
         canPrevious: Boolean = true,
         folderName: String? = "FLAC Collection",
         collection: List<AudioTrack> = songs,
-        simulateMedia3Transitions: Boolean = false
+        simulateMedia3Transitions: Boolean = false,
+        shuffleEnabled: Boolean = false
     ) {
         rule.setContent {
             var liked by remember { mutableStateOf(setOf<Long>()) }
@@ -78,7 +79,7 @@ class LazyPlayerUiTest {
                 playing = false,
                 positionState = progress,
                 duration = 35000L,
-                shuffle = false,
+                shuffle = shuffleEnabled,
                 repeatMode = Player.REPEAT_MODE_OFF,
                 canNext = canNext,
                 canPrevious = canPrevious,
@@ -206,6 +207,34 @@ class LazyPlayerUiTest {
             .assert(hasAnyDescendant(hasText("Second Track")))
         save("07-carousel-return-track")
         rule.runOnIdle { assertEquals(0, toggles) }
+    }
+
+    @Test fun miniAndExpandedSwipesUseSameObservedTrackState() {
+        show(active = songs[1], simulateMedia3Transitions = true)
+        rule.onNodeWithTag("mini-swipe-zone").performTouchInput { swipeLeft() }
+        rule.waitUntil(5_000) { nextSwipes == 1 }
+        rule.waitForIdle()
+        rule.onNodeWithTag("mini-swipe-zone").performClick()
+        rule.onNodeWithTag("now-track-details")
+            .assert(hasAnyDescendant(hasText("A Very Long Example FLAC Title", substring = true)))
+        save("08-shared-swipe-arrival")
+        rule.onNodeWithTag("now-artwork-swipe-zone").performTouchInput { swipeRight() }
+        rule.waitUntil(5_000) { previousSwipes == 1 }
+        rule.waitForIdle()
+        rule.onNodeWithTag("now-track-details")
+            .assert(hasAnyDescendant(hasText("Second Track")))
+        rule.runOnIdle { assertEquals(0, toggles) }
+    }
+
+    @Test fun shuffleModeTrackSwitchDoesNotRequireGuessedNeighbourArtwork() {
+        show(active = songs[1], simulateMedia3Transitions = true, shuffleEnabled = true)
+        rule.onNodeWithTag("mini-swipe-zone").performClick()
+        rule.onNodeWithTag("now-artwork-swipe-zone").performTouchInput { swipeLeft() }
+        rule.waitUntil(5_000) { nextSwipes == 1 }
+        rule.waitForIdle()
+        rule.onNodeWithTag("now-track-details")
+            .assert(hasAnyDescendant(hasText("A Very Long Example FLAC Title", substring = true)))
+        save("09-shuffle-transition")
     }
 
     @Test fun hundredTrackLibraryKeepsDockAndAccessibleLastSong() {
