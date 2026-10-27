@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -491,7 +492,7 @@ private fun UnifiedDock(
             if (track != null) {
                 Row(Modifier.fillMaxWidth().height(64.dp).padding(start = 9.dp, end = 4.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    Row(Modifier.weight(1f).fillMaxHeight()
+                    Row(Modifier.weight(1f).fillMaxHeight().testTag("mini-swipe-zone")
                         .trackSwipe(track.id, canNext, canPrevious, onSwipeNext, onSwipePrevious)
                         .clickable(onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
                         Artwork(track, Modifier.size(46.dp), 11.dp, targetPx = 192)
@@ -534,7 +535,7 @@ private fun DockTabs(grouping: Grouping, onGroup: (Grouping) -> Unit, reduceMoti
             Spacer(Modifier.width(5.dp))
             Text("Library", color = SoftText, fontSize = 11.sp, fontWeight = FontWeight.Medium)
         }
-        BoxWithConstraints(Modifier.weight(1f).height(49.dp)) {
+        BoxWithConstraints(Modifier.weight(1f).height(49.dp).testTag("dock-tabs")) {
             val segment = maxWidth / 3
             val selected = Grouping.entries.indexOf(grouping).coerceAtLeast(0)
             val x by animateDpAsState(targetValue = segment * selected,
@@ -563,9 +564,10 @@ private fun DockTabs(grouping: Grouping, onGroup: (Grouping) -> Unit, reduceMoti
 
 @Composable
 private fun DockProgress(positionState: State<Long>, duration: Long, playing: Boolean) {
+    val reduceMotion = rememberReducedMotion()
     val progress = if (duration > 0L) positionState.value.toFloat() / duration else 0f
     val fraction by animateFloatAsState(progress.coerceIn(0f, 1f),
-        animationSpec = tween(if (playing) 490 else 0, easing = LinearEasing), label = "dock-progress")
+        animationSpec = tween(if (!reduceMotion && playing) 490 else 0, easing = LinearEasing), label = "dock-progress")
     Box(Modifier.fillMaxWidth().height(2.dp).background(Color.White.copy(alpha = 0.08f))) {
         Box(Modifier.fillMaxWidth(fraction).fillMaxHeight().background(MistWhite.copy(alpha = 0.82f)))
     }
@@ -583,6 +585,7 @@ private fun Modifier.trackSwipe(
     onNext: () -> Unit, onPrevious: () -> Unit
 ): Modifier = composed {
     val scope = rememberCoroutineScope()
+    val reduceMotion = rememberReducedMotion()
     val density = LocalDensity.current
     val threshold = with(density) { 72.dp.toPx() }
     val displacement = remember(trackId) { Animatable(0f) }
@@ -605,13 +608,17 @@ private fun Modifier.trackSwipe(
                         SwipeTrackAction.NONE -> Unit
                     }
                     scope.launch {
-                        displacement.animateTo(0f,
+                        if (reduceMotion) displacement.snapTo(0f)
+                        else displacement.animateTo(0f,
                             spring(dampingRatio = Spring.DampingRatioNoBouncy,
                                 stiffness = Spring.StiffnessMedium))
                     }
                 },
                 onDragCancel = {
-                    scope.launch { displacement.animateTo(0f, spring()) }
+                    scope.launch {
+                        if (reduceMotion) displacement.snapTo(0f)
+                        else displacement.animateTo(0f, spring())
+                    }
                 }
             )
         }
@@ -651,11 +658,12 @@ private fun NowPlaying(
     onSwipePrevious: () -> Unit,
 ) {
     val tint = rememberArtworkTint(track)
+    val reduceMotion = rememberReducedMotion()
     var draggedFraction by remember(track.id) { mutableStateOf<Float?>(null) }
     val sampledFraction = (if (duration > 0L) positionState.value.toFloat() / duration else 0f).coerceIn(0f, 1f)
     val smoothFraction by animateFloatAsState(
         targetValue = sampledFraction,
-        animationSpec = tween(if (playing) 490 else 0, easing = LinearEasing),
+        animationSpec = tween(if (!reduceMotion && playing) 490 else 0, easing = LinearEasing),
         label = "now-playing-progress"
     )
     val fraction = (draggedFraction ?: smoothFraction).coerceIn(0f, 1f)
@@ -684,7 +692,7 @@ private fun NowPlaying(
             Spacer(Modifier.height(if (compact) 8.dp else 17.dp).heightIn(min = air))
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Artwork(track,
-                    Modifier.size(coverSize)
+                    Modifier.size(coverSize).testTag("now-artwork-swipe-zone")
                         .trackSwipe(track.id, canNext, canPrevious,
                             onSwipeNext, onSwipePrevious)
                         .border(0.7.dp, Color.White.copy(alpha = 0.20f), RoundedCornerShape(22.dp)),
