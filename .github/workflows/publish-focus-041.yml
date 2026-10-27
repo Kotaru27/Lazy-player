@@ -1,0 +1,63 @@
+name: Publish Lazy Player Focus 0.4.1 visual patch
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-focus-041.yml']
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch proven debug build and verify checksum/package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh run view 40468166912 -R "$GITHUB_REPOSITORY" --json conclusion --jq .conclusion)" = success
+          mkdir -p dist
+          gh run download 40468166912 -R "$GITHUB_REPOSITORY" -n lazy-player-debug-apk -D dist
+          echo "a0f1aeda7bd5e89bf32179c980c5edc6284faa5fff0b8e846aabb5fa8f1e1530  dist/app-debug.apk" | sha256sum -c -
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/app-debug.apk > /tmp/appinfo.txt
+          grep -F "package: name='com.lazy.player.focus'" /tmp/appinfo.txt
+          grep -F "versionCode='2'" /tmp/appinfo.txt
+          grep -F "versionName='0.4.1-preview'" /tmp/appinfo.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose dist/app-debug.apk
+          mv dist/app-debug.apk dist/LazyPlayer-Focus-v0.4.1-debug.apk
+          (cd dist && sha256sum LazyPlayer-Focus-v0.4.1-debug.apk > SHA256SUMS.txt)
+      - name: Publish v0.4.1 pre-release (never overwrite)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=v0.4.1-focus-preview
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release exists, refusing overwrite"
+            exit 0
+          fi
+          cat > /tmp/notes.md <<'NOTES'
+          ## Lazy Player Focus 0.4.1 — Unified dock and collection controls
+
+          Experimental cloud-built Android debug preview, **not a finished design certification**.
+          - **Play all / Shuffle** the currently shown songs, search results, album, artist or favourites collection.
+          - **One integrated dock** for mini-player, two navigation destinations and slim progress indicator.
+          - Dock material now correctly layers the blurred album art, controlled tint and fine specular glass edge.
+          - **Now Playing:** improved height distribution, one reachable queue action, 3dp seek rail with accessible hit target, clearer repeat/shuffle on states.
+          - Quieter selected-song indicator; explicit playing/paused icons.
+          - Music folder name is cleaned (e.g. `primary:Music` displays `Music`); "Use all music" moved into the folder options menu.
+          - Position tick isolated from library re-rendering; visually interpolated playback progress.
+
+          **Package:** `com.lazy.player.focus` — distinct from `com.lazy.player`, `com.lazy.player.next`, and `com.lazy.player.refined`.
+          **Warning:** This APK is signed using the GitHub Actions debug key. If you installed v0.4.0 Focus, a different debug signature may require uninstalling that Focus build first; this does **not** touch the other three app packages. Keep original FLAC files untouched.
+          **Limitations:** No verified real optical backdrop refraction or shared-element artwork hero transition. No measured smoothness or real-phone playback results; IEM / USB DAC exclusive bit-perfect output is not implemented.
+
+          **Build proof:** [GitHub Actions 40468166912](https://github.com/Kotaru27/Lazy-player/actions/runs/40468166912), commit `4ea6dd808591cadebfba1dbf9c52e3f055579984`; APK build and JVM unit tests passed.
+          **SHA-256:** `a0f1aeda7bd5e89bf32179c980c5edc6284faa5fff0b8e846aabb5fa8f1e1530`.
+          NOTES
+          gh release create "$tag" dist/LazyPlayer-Focus-v0.4.1-debug.apk dist/SHA256SUMS.txt \
+            -R "$GITHUB_REPOSITORY" --target 4ea6dd808591cadebfba1dbf9c52e3f055579984 \
+            --title "Lazy Player Focus v0.4.1 — Unified Glass Dock Preview" \
+            --notes-file /tmp/notes.md --prerelease --latest=false
+          gh release view "$tag" -R "$GITHUB_REPOSITORY" --json url,tagName,assets,isDraft,isPrerelease
