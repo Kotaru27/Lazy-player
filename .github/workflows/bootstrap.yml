@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'bootstrap/source.tar.xz.b64'
+      - 'bootstrap/trigger.txt'
   workflow_dispatch:
 
 permissions:
@@ -20,8 +21,10 @@ jobs:
           base64 --decode bootstrap/source.tar.xz.b64 > /tmp/lazy-player-source.tar.xz
           echo "2d4b6d151aea9995e926935a2bff8d3c6063f3f19ab879472617c9749767d84d  /tmp/lazy-player-source.tar.xz" | sha256sum --check
           tar -xJf /tmp/lazy-player-source.tar.xz -C .
-          rm bootstrap/source.tar.xz.b64
+          rm -f bootstrap/source.tar.xz.b64 bootstrap/trigger.txt
           rmdir bootstrap
+          # Actions GITHUB_TOKEN cannot modify workflow files; add this via the connected GitHub tool.
+          rm -f .github/workflows/android.yml
       - name: Commit human-readable source code
         shell: bash
         run: |
