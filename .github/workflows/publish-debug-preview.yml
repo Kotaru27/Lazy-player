@@ -1,0 +1,63 @@
+name: Publish Lazy Player v0.1.1 debug preview to Releases
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-debug-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download exact successful APK from build 40455720018
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh run download 40455720018 -R "$GITHUB_REPOSITORY" \
+            -n lazy-player-debug-apk -D dist
+          test -s dist/app-debug.apk
+          echo "f242484a1873bcc2ea9bcef4a207108f890bdfa789a558e00c5fcaab9f865f48  dist/app-debug.apk" | sha256sum -c -
+          mv dist/app-debug.apk dist/LazyPlayer-v0.1.1-debug.apk
+          (cd dist && sha256sum LazyPlayer-v0.1.1-debug.apk > SHA256SUMS.txt)
+      - name: Publish checked debug APK under GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="v0.1.1-debug.1"
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists; refusing to replace published assets."
+            gh release view "$tag" -R "$GITHUB_REPOSITORY" --json url,assets
+            exit 0
+          fi
+          cat > /tmp/release-notes.md <<'NOTES'
+          ## Lazy Player v0.1.1 — Android debug preview
+
+          **Preview build for testing. Not a production-signed release.**
+
+          - Original offline Android music player, with local library, playback queue, favourites and minimal glass-inspired UI.
+          - Android 8.0+ (`minSdk 26`), package: `com.lazy.player`.
+          - GitHub Actions unit tests and APK assembly passed: [verified build 40455720018](https://github.com/Kotaru27/Lazy-player/actions/runs/40455720018).
+          - Source revision: [513a849b52a0adc52aa714609ab2c2c08b76a9c5](https://github.com/Kotaru27/Lazy-player/commit/513a849b52a0adc52aa714609ab2c2c08b76a9c5).
+          - APK SHA-256: `f242484a1873bcc2ea9bcef4a207108f890bdfa789a558e00c5fcaab9f865f48`.
+
+          **Limitations:** The visual liquid-glass and real-device playback audits are not fully verified. This APK uses a CI debug signature; a future separately built debug APK may not install over it without removing the existing app, which can erase app-specific data. Your original music files are not packaged in or modified by this release.
+
+          Download **LazyPlayer-v0.1.1-debug.apk** from Assets. The `SHA256SUMS.txt` asset is provided for integrity verification.
+          NOTES
+          gh release create "$tag" \
+            dist/LazyPlayer-v0.1.1-debug.apk dist/SHA256SUMS.txt \
+            -R "$GITHUB_REPOSITORY" \
+            --target 513a849b52a0adc52aa714609ab2c2c08b76a9c5 \
+            --title "Lazy Player v0.1.1 — Debug Preview" \
+            --notes-file /tmp/release-notes.md \
+            --prerelease --latest=false
+          gh release view "$tag" -R "$GITHUB_REPOSITORY" --json url,tagName,assets,isDraft,isPrerelease
