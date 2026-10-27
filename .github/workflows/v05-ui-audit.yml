@@ -1,0 +1,51 @@
+name: Lazy Player v0.5 Android rendered UI audit
+on:
+  push:
+    branches: ['redesign/**']
+    paths:
+      - 'app/src/androidTest/**'
+      - 'tools/v05-emulator.sh'
+      - '.github/workflows/v05-ui-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 19
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable hardware acceleration where supported
+        run: |
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; ls -l /dev/kvm; fi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Compile app and instrumentation APKs
+        run: |
+          sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+          gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
+      - name: Emulator UI, gestures and screenshot evidence
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_5
+          sdcard-path-or-size: 512M
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: bash tools/v05-emulator.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lazy-player-v05-rendered-ui-evidence
+          path: evidence/
+          if-no-files-found: warn
