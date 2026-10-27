@@ -299,8 +299,19 @@ fun LazyPlayerScreen(
                         fadeOut(tween(165))
             ) {
                 currentTrack?.let { track ->
+                    // Media3's queue order is only a neighbor hint when shuffle is off.
+                    // Do not prefetch the wrong cover for an arbitrary shuffle order.
+                    val artworkQueueIndex = remember(queue, track.id) {
+                        queue.indexOfFirst { it.id == track.id }
+                    }
+                    val previousArtworkTrack = if (!shuffle && canPrevious && artworkQueueIndex > 0)
+                        queue[artworkQueueIndex - 1] else null
+                    val nextArtworkTrack = if (!shuffle && canNext && artworkQueueIndex >= 0)
+                        queue.getOrNull(artworkQueueIndex + 1) else null
                     NowPlaying(
                         track, playing, positionState, duration, shuffle, repeatMode,
+                        previousArtworkTrack = previousArtworkTrack,
+                        nextArtworkTrack = nextArtworkTrack,
                         expanded = fullPlayer, reduceMotion = reduceMotion,
                         liked = track.id in favorites,
                         onDismiss = { fullPlayer = false }, onPlay = onTogglePlay, onNext = onNext, onPrevious = onPrevious,
@@ -912,6 +923,8 @@ private fun PlayerTimeline(
 @Composable
 private fun NowPlaying(
     track: AudioTrack,
+    previousArtworkTrack: AudioTrack?,
+    nextArtworkTrack: AudioTrack?,
     playing: Boolean,
     positionState: State<Long>,
     duration: Long,
@@ -935,6 +948,7 @@ private fun NowPlaying(
     onSwipeNext: () -> Unit,
     onSwipePrevious: () -> Unit,
 ) {
+    PrefetchSwipeArtwork(nextArtworkTrack, previousArtworkTrack)
     val tint = rememberArtworkTint(track)
     // Expand once on opening the player; changing tracks should crossfade
     // album art rather than repeatedly zoom the whole cover in and out.
