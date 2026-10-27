@@ -57,10 +57,12 @@ class LazyPlayerUiTest {
         canNext: Boolean = true,
         canPrevious: Boolean = true,
         folderName: String? = "FLAC Collection",
-        collection: List<AudioTrack> = songs
+        collection: List<AudioTrack> = songs,
+        simulateMedia3Transitions: Boolean = false
     ) {
         rule.setContent {
             var liked by remember { mutableStateOf(setOf<Long>()) }
+            var activeSong by remember { mutableStateOf(active) }
             val progress = remember { mutableLongStateOf(7000L) }
             LazyPlayerScreen(
                 tracks = collection,
@@ -72,7 +74,7 @@ class LazyPlayerUiTest {
                 onChooseFolder = { folderSelections++ },
                 onUseAllMusic = { allMusicSelections++ },
                 onPermission = {},
-                currentTrack = active,
+                currentTrack = activeSong,
                 playing = false,
                 positionState = progress,
                 duration = 35000L,
@@ -90,8 +92,20 @@ class LazyPlayerUiTest {
                 onTogglePlay = { toggles++ },
                 onNext = {},
                 onPrevious = {},
-                onSwipeNext = { nextSwipes++ },
-                onSwipePrevious = { previousSwipes++ },
+                onSwipeNext = {
+                    nextSwipes++
+                    if (simulateMedia3Transitions) {
+                        val i = collection.indexOfFirst { it.id == activeSong?.id }
+                        if (canNext && i >= 0 && i + 1 < collection.size) activeSong = collection[i + 1]
+                    }
+                },
+                onSwipePrevious = {
+                    previousSwipes++
+                    if (simulateMedia3Transitions) {
+                        val i = collection.indexOfFirst { it.id == activeSong?.id }
+                        if (canPrevious && i > 0) activeSong = collection[i - 1]
+                    }
+                },
                 onSeek = {},
                 onShuffle = {},
                 onRepeat = {},
@@ -171,6 +185,27 @@ class LazyPlayerUiTest {
             assertEquals(2, nextSwipes)
             assertEquals(0, toggles)
         }
+    }
+
+    @Test fun carouselActuallyChangesTrackMetadataAndSurvivesRapidReverse() {
+        // Unlike the legacy counter-only swipe test this updates observable
+        // player state, just as a Media3 controller event updates currentTrack.
+        show(active = songs[1], simulateMedia3Transitions = true)
+        rule.onNodeWithTag("mini-swipe-zone").performClick()
+        rule.onNodeWithTag("now-artwork-swipe-zone").assertExists()
+        rule.onNodeWithTag("now-artwork-swipe-zone").performTouchInput { swipeLeft() }
+        rule.waitUntil(5_000) { nextSwipes == 1 }
+        rule.waitForIdle()
+        rule.onNodeWithTag("now-track-details")
+            .assert(hasAnyDescendant(hasText("A Very Long Example FLAC Title", substring = true)))
+        save("06-carousel-next-track")
+        rule.onNodeWithTag("now-artwork-swipe-zone").performTouchInput { swipeRight() }
+        rule.waitUntil(5_000) { previousSwipes == 1 }
+        rule.waitForIdle()
+        rule.onNodeWithTag("now-track-details")
+            .assert(hasAnyDescendant(hasText("Second Track")))
+        save("07-carousel-return-track")
+        rule.runOnIdle { assertEquals(0, toggles) }
     }
 
     @Test fun hundredTrackLibraryKeepsDockAndAccessibleLastSong() {
