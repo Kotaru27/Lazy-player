@@ -127,7 +127,7 @@ class LazyPlayerUiTest {
         rule.onNodeWithTag("dock-tab-songs").performClick()
         rule.onAllNodesWithContentDescription("Add to favourites").onFirst().performClick()
         rule.onNodeWithContentDescription("Show favourites").performClick()
-        rule.onNodeWithContentDescription("Play all 1 songs").performClick()
+        rule.onNodeWithContentDescription("Play all 1 song").performClick()
         rule.runOnIdle { assertEquals(1, selected.size) }
     }
 
