@@ -49,6 +49,8 @@ private data class PlayerView(
     val durationMs: Long = 0L,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val shuffle: Boolean = false,
+    val canNext: Boolean = false,
+    val canPrevious: Boolean = false,
 )
 
 private fun observe(controller: MediaController): PlayerView = PlayerView(
@@ -57,6 +59,8 @@ private fun observe(controller: MediaController): PlayerView = PlayerView(
     durationMs = controller.duration.coerceAtLeast(0),
     repeatMode = controller.repeatMode,
     shuffle = controller.shuffleModeEnabled,
+    canNext = controller.hasNextMediaItem(),
+    canPrevious = controller.hasPreviousMediaItem(),
 )
 
 @Composable
@@ -209,6 +213,8 @@ private fun LazyPlayerApplication() {
         duration = state.durationMs,
         shuffle = state.shuffle,
         repeatMode = state.repeatMode,
+        canNext = state.canNext,
+        canPrevious = state.canPrevious,
         favorites = favorites,
         onRefresh = { refreshTick++ },
         onPlayTrack = { track, queue ->
@@ -238,8 +244,12 @@ private fun LazyPlayerApplication() {
         },
         onNext = { controller?.seekToNextMediaItem() },
         onPrevious = {
-            controller?.let { if (it.currentPosition > 3_000) it.seekTo(0) else it.seekToPreviousMediaItem() }
+            controller?.let { if (it.currentPosition > 3_000) it.seekTo(0) else if (it.hasPreviousMediaItem()) it.seekToPreviousMediaItem() }
         },
+        // Gesture navigation must not trigger Media3's "restart current" button convention.
+        // Seeking to a queue item retains playWhenReady, shuffle and repeat state.
+        onSwipeNext = { controller?.let { if (it.hasNextMediaItem()) it.seekToNextMediaItem() } },
+        onSwipePrevious = { controller?.let { if (it.hasPreviousMediaItem()) it.seekToPreviousMediaItem() } },
         onSeek = { controller?.seekTo(it) },
         onShuffle = { controller?.let { c -> c.shuffleModeEnabled = !c.shuffleModeEnabled } },
         onRepeat = {

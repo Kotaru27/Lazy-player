@@ -1,8 +1,16 @@
 package com.lazy.player.ui
 
 import androidx.activity.compose.BackHandler
+import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -10,6 +18,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.composed
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -24,6 +35,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.consume
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.offset
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -59,6 +78,8 @@ fun LazyPlayerScreen(
     duration: Long,
     shuffle: Boolean,
     repeatMode: Int,
+    canNext: Boolean,
+    canPrevious: Boolean,
     favorites: Set<Long>,
     onRefresh: () -> Unit,
     onPlayTrack: (AudioTrack, List<AudioTrack>) -> Unit,
@@ -66,6 +87,8 @@ fun LazyPlayerScreen(
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
+    onSwipeNext: () -> Unit,
+    onSwipePrevious: () -> Unit,
     onSeek: (Long) -> Unit,
     onShuffle: () -> Unit,
     onRepeat: () -> Unit,
@@ -80,6 +103,7 @@ fun LazyPlayerScreen(
     var selectedGroup by remember { mutableStateOf<Pair<Grouping, String>?>(null) }
     var fullPlayer by remember { mutableStateOf(false) }
     var showQueue by remember { mutableStateOf(false) }
+    val reduceMotion = rememberReducedMotion()
 
     BackHandler(enabled = fullPlayer && !showQueue) { fullPlayer = false }
     BackHandler(enabled = selectedGroup != null && !fullPlayer) { selectedGroup = null }
@@ -99,25 +123,32 @@ fun LazyPlayerScreen(
             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                 Column(Modifier.weight(1f)) {
                     Spacer(Modifier.height(6.dp))
-                    Row(Modifier.fillMaxWidth().height(49.dp).padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().height(55.dp).padding(horizontal = 18.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
                         if (selectedGroup != null) {
                             PlainAction(Icons.Rounded.ArrowBack, "Back to library") { selectedGroup = null }
-                            Spacer(Modifier.width(5.dp))
                             Text(
                                 if (selectedGroup!!.first == Grouping.Albums)
                                     tracks.firstOrNull { albumKey(it) == selectedGroup!!.second }?.album ?: "Album"
                                 else selectedGroup!!.second,
-                                modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                color = MistWhite, fontSize = 20.sp, fontWeight = FontWeight.Medium
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                color = MistWhite, fontSize = 19.sp, fontWeight = FontWeight.SemiBold
                             )
                         } else {
                             Text("lazy player", modifier = Modifier.weight(1f), fontSize = 23.sp,
-                                fontWeight = FontWeight.Medium, color = MistWhite, letterSpacing = (-0.8).sp)
+                                fontWeight = FontWeight.SemiBold, color = MistWhite, letterSpacing = (-0.6).sp)
                         }
+                        FolderMenu(folderName, onChooseFolder, onUseAllMusic)
                         PlainAction(if (search) Icons.Rounded.Close else Icons.Rounded.Search,
                             if (search) "Close search" else "Search music") {
                             search = !search
                             if (!search) query = ""
+                        }
+                        PlainAction(if (page == Page.Liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                            if (page == Page.Liked) "Return to music library" else "Show favourites") {
+                            page = if (page == Page.Liked) Page.Listen else Page.Liked
+                            selectedGroup = null
                         }
                     }
                     if (search) {
@@ -139,40 +170,19 @@ fun LazyPlayerScreen(
                             )
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
-                    if (selectedGroup == null && page == Page.Listen) {
-                        FolderSourceRow(folderName, onChooseFolder, onUseAllMusic)
-                        Spacer(Modifier.height(7.dp))
-                        Row(Modifier.fillMaxWidth().height(42.dp).padding(horizontal = 20.dp),
-                            horizontalArrangement = Arrangement.spacedBy(24.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Grouping.entries.forEach { tab ->
-                                val active = grouping == tab
-                                Column(Modifier.height(42.dp).clickable { grouping = tab }.padding(horizontal = 2.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Bottom) {
-                                    Text(tab.name, color = if (active) MistWhite else SoftText, fontSize = 14.sp,
-                                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal)
-                                    Spacer(Modifier.height(8.dp))
-                                    Box(Modifier.width(26.dp).height(2.dp).clip(CircleShape)
-                                        .background(if (active) Lavender else Color.Transparent))
-                                }
-                            }
-                        }
-                    } else if (selectedGroup == null) {
-                        Text("Favourites", Modifier.padding(horizontal = 22.dp, vertical = 10.dp),
-                            color = MistWhite, fontSize = 18.sp, fontWeight = FontWeight.Medium)
-                    } else {
-                        Text("${filtered.size} songs", Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
-                            fontSize = 12.sp, color = SoftText)
-                    }
-                    Spacer(Modifier.height(7.dp))
-                    if (hasPermission && !libraryLoading && filtered.isNotEmpty()) {
-                        CollectionActions(filtered.size,
-                            onPlay = { onPlayCollection(filtered, false) },
-                            onShuffle = { onPlayCollection(filtered, true) })
-                        Spacer(Modifier.height(6.dp))
-                    }
+                    Spacer(Modifier.height(11.dp))
+                    CollectionHeading(
+                        name = when {
+                            page == Page.Liked -> "Favourites"
+                            selectedGroup != null -> "Songs"
+                            else -> grouping.name
+                        },
+                        count = filtered.size,
+                        enabled = hasPermission && !libraryLoading && filtered.isNotEmpty(),
+                        onPlay = { onPlayCollection(filtered, false) },
+                        onShuffle = { onPlayCollection(filtered, true) }
+                    )
+                    Spacer(Modifier.height(6.dp))
                     when {
                         !hasPermission -> IntroState(onPermission, onChooseFolder)
                         libraryLoading && tracks.isEmpty() -> LoadingLibrary()
@@ -191,15 +201,10 @@ fun LazyPlayerScreen(
                         }
                         else -> {
                             LazyColumn(contentPadding = PaddingValues(bottom = 26.dp, start = 20.dp, end = 20.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                                item {
-                                    Row(Modifier.fillMaxWidth().padding(horizontal = 5.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Text(if (page == Page.Liked) "FAVOURITES" else "YOUR TRACKS", color = SoftText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.1.sp)
-                                        Spacer(Modifier.weight(1f))
-                                        Text("${filtered.size} songs", fontSize = 11.sp, color = SoftText)
-                                    }
-                                }
                                 items(filtered, key = { it.id }) { track ->
-                                    TrackRow(track, selected = currentTrack?.id == track.id, playing = playing, onClick = { onPlayTrack(track, filtered) })
+                                    TrackRow(track, selected = currentTrack?.id == track.id, playing = playing,
+                                        liked = track.id in favorites, onFavorite = { onToggleFavorite(track.id) },
+                                        onClick = { onPlayTrack(track, filtered) })
                                 }
                             }
                         }
@@ -207,19 +212,25 @@ fun LazyPlayerScreen(
                 }
                 UnifiedDock(
                     track = currentTrack, playing = playing,
+                    reduceMotion = reduceMotion,
                     positionState = positionState, duration = duration,
-                    page = page,
+                    grouping = grouping,
+                    onGroup = { grouping = it; page = Page.Listen; selectedGroup = null },
                     onOpen = { fullPlayer = true },
                     onPlay = onTogglePlay, onNext = onNext,
-                    onListen = { page = Page.Listen; selectedGroup = null; query = "" },
-                    onLiked = { page = Page.Liked; selectedGroup = null; query = "" }
+                    canNext = canNext, canPrevious = canPrevious,
+                    onSwipeNext = onSwipeNext, onSwipePrevious = onSwipePrevious
                 )
                 Spacer(Modifier.height(8.dp))
             }
             AnimatedVisibility(
                 visible = fullPlayer && currentTrack != null,
-                enter = slideInVertically(initialOffsetY = { it / 3 }, animationSpec = tween(320)) + fadeIn(tween(250)),
-                exit = slideOutVertically(targetOffsetY = { it / 3 }, animationSpec = tween(240)) + fadeOut(tween(210))
+                enter = if (reduceMotion) fadeIn(tween(0))
+                    else slideInVertically(initialOffsetY = { it / 6 }, animationSpec = tween(280)) +
+                        scaleIn(initialScale = 0.96f, animationSpec = tween(280)) + fadeIn(tween(240)),
+                exit = if (reduceMotion) fadeOut(tween(0))
+                    else slideOutVertically(targetOffsetY = { it / 6 }, animationSpec = tween(225)) +
+                        scaleOut(targetScale = 0.97f, animationSpec = tween(225)) + fadeOut(tween(185))
             ) {
                 currentTrack?.let { track ->
                     NowPlaying(
@@ -227,7 +238,9 @@ fun LazyPlayerScreen(
                         liked = track.id in favorites,
                         onDismiss = { fullPlayer = false }, onPlay = onTogglePlay, onNext = onNext, onPrevious = onPrevious,
                         onSeek = onSeek, onShuffle = onShuffle, onRepeat = onRepeat, onFavorite = { onToggleFavorite(track.id) },
-                        onQueue = { showQueue = true }, usbDacConnected = usbDacConnected
+                        onQueue = { showQueue = true }, usbDacConnected = usbDacConnected,
+                        canNext = canNext, canPrevious = canPrevious,
+                        onSwipeNext = onSwipeNext, onSwipePrevious = onSwipePrevious
                     )
                 }
             }
@@ -241,12 +254,24 @@ fun LazyPlayerScreen(
                     Text("Up next", Modifier.padding(start = 26.dp, top = 25.dp, bottom = 18.dp), fontSize = 26.sp, fontWeight = FontWeight.Light)
                     LazyColumn(Modifier.fillMaxWidth().heightIn(max = 460.dp), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 36.dp)) {
                         items(queue.size) { index ->
-                            TrackRow(queue[index], selected = currentTrack?.id == queue[index].id, playing = playing, onClick = { onQueueSelection(index); showQueue = false })
+                            TrackRow(queue[index], selected = currentTrack?.id == queue[index].id, playing = playing,
+                                liked = queue[index].id in favorites,
+                                onFavorite = { onToggleFavorite(queue[index].id) },
+                                onClick = { onQueueSelection(index); showQueue = false })
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun rememberReducedMotion(): Boolean {
+    val context = LocalContext.current
+    return remember(context) {
+        Settings.Global.getFloat(context.contentResolver,
+            Settings.Global.ANIMATOR_DURATION_SCALE, 1f) <= 0f
     }
 }
 
@@ -258,59 +283,60 @@ private fun PlainAction(icon: androidx.compose.ui.graphics.vector.ImageVector, l
 }
 
 @Composable
-private fun FolderSourceRow(folderName: String?, onChooseFolder: () -> Unit, onUseAllMusic: () -> Unit) {
-    var optionsOpen by remember { mutableStateOf(false) }
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(48.dp)
-            .clip(RoundedCornerShape(15.dp)).background(Color.White.copy(alpha = 0.045f)),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(Modifier.weight(1f).fillMaxHeight().clickable(onClick = onChooseFolder).padding(start = 14.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.FolderOpen, null, tint = SoftText, modifier = Modifier.size(19.dp))
-            Spacer(Modifier.width(11.dp))
-            Text(folderName ?: "Choose music folder", modifier = Modifier.weight(1f),
-                color = MistWhite, fontWeight = FontWeight.Medium, fontSize = 13.sp,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        Box {
-            IconButton(onClick = { optionsOpen = true }, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Rounded.MoreVert, "Music folder options", tint = SoftText, modifier = Modifier.size(21.dp))
-            }
-            DropdownMenu(expanded = optionsOpen, onDismissRequest = { optionsOpen = false },
-                modifier = Modifier.background(Color(0xFF17232C))) {
-                DropdownMenuItem(text = { Text("Choose folder") }, onClick = {
-                    optionsOpen = false; onChooseFolder()
-                }, leadingIcon = { Icon(Icons.Rounded.FolderOpen, null) })
-                if (folderName != null) {
-                    DropdownMenuItem(text = { Text("Use all music") }, onClick = {
-                        optionsOpen = false; onUseAllMusic()
-                    }, leadingIcon = { Icon(Icons.Rounded.LibraryMusic, null) })
-                }
+private fun FolderMenu(folderName: String?, onChooseFolder: () -> Unit, onUseAllMusic: () -> Unit) {
+    var show by remember { mutableStateOf(false) }
+    Box {
+        PlainAction(Icons.Rounded.FolderOpen,
+            if (folderName == null) "Select music folder" else "Folder: $folderName") { show = true }
+        DropdownMenu(expanded = show, onDismissRequest = { show = false },
+            modifier = Modifier.background(Color(0xFF17232B))) {
+            DropdownMenuItem(enabled = false,
+                text = { Text(folderName ?: "All device music", color = MistWhite, fontWeight = FontWeight.SemiBold,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                onClick = {})
+            DropdownMenuItem(text = { Text("Change folder") },
+                leadingIcon = { Icon(Icons.Rounded.FolderOpen, null) },
+                onClick = { show = false; onChooseFolder() })
+            if (folderName != null) {
+                DropdownMenuItem(text = { Text("Use all music") },
+                    leadingIcon = { Icon(Icons.Rounded.LibraryMusic, null) },
+                    onClick = { show = false; onUseAllMusic() })
             }
         }
     }
 }
 
 @Composable
-private fun CollectionActions(size: Int, onPlay: () -> Unit, onShuffle: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 21.dp).height(48.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.height(42.dp).clip(CircleShape).background(MistWhite)
-            .clickable(onClick = onPlay).padding(horizontal = 17.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.PlayArrow, null, tint = LazyNight, modifier = Modifier.size(19.dp))
-            Spacer(Modifier.width(5.dp))
-            Text("Play all", color = LazyNight, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+private fun CollectionHeading(name: String, count: Int, enabled: Boolean,
+    onPlay: () -> Unit, onShuffle: () -> Unit) {
+    Row(Modifier.fillMaxWidth().height(59.dp).padding(horizontal = 22.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(name, fontSize = 20.sp, color = MistWhite, fontWeight = FontWeight.SemiBold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("$"+"{count} songs", color = SoftText, fontSize = 11.sp)
         }
-        Row(Modifier.height(42.dp).clip(CircleShape).clickable(onClick = onShuffle)
-            .padding(horizontal = 13.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.Shuffle, null, tint = MistWhite, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(7.dp))
-            Text("Shuffle", color = MistWhite, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        SmallAction(Icons.Rounded.PlayArrow, "Play all $"+"{count} songs", enabled, onPlay)
+        Spacer(Modifier.width(5.dp))
+        SmallAction(Icons.Rounded.Shuffle, "Shuffle all $"+"{count} songs", enabled, onShuffle)
+    }
+}
+
+@Composable
+private fun SmallAction(icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String, enabled: Boolean, onClick: () -> Unit) {
+    val source = remember { MutableInteractionSource() }
+    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(48.dp),
+        interactionSource = source) {
+        Box(Modifier.size(39.dp).clip(RoundedCornerShape(13.dp))
+            .background(if (enabled) Color.White.copy(alpha = 0.075f) else Color.White.copy(alpha = 0.025f))
+            .border(0.6.dp, Color.White.copy(alpha = if (enabled) 0.11f else 0.025f),
+                RoundedCornerShape(13.dp)),
+            contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = title,
+                tint = if (enabled) MistWhite else SoftText.copy(alpha = 0.42f),
+                modifier = Modifier.size(20.dp))
         }
-        Spacer(Modifier.weight(1f))
-        Text(size.toString() + " tracks", color = SoftText, fontSize = 11.sp)
     }
 }
 
@@ -403,83 +429,132 @@ private fun GroupRow(title: String, tracks: List<AudioTrack>, onClick: () -> Uni
 }
 
 @Composable
-private fun TrackRow(track: AudioTrack, selected: Boolean, playing: Boolean, onClick: () -> Unit) {
+private fun TrackRow(
+    track: AudioTrack, selected: Boolean, playing: Boolean,
+    liked: Boolean, onFavorite: () -> Unit, onClick: () -> Unit
+) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(RoundedCornerShape(13.dp))
-            .clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 6.dp),
+        Modifier.fillMaxWidth().heightIn(min = 67.dp).clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.width(3.dp).height(27.dp).clip(CircleShape)
+        Box(Modifier.width(2.dp).height(26.dp).clip(CircleShape)
             .background(if (selected) MistWhite else Color.Transparent))
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(7.dp))
         Artwork(track, Modifier.size(49.dp), 12.dp)
-        Spacer(Modifier.width(11.dp))
+        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(track.title, color = MistWhite, fontSize = 14.sp,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(5.dp))
+            Spacer(Modifier.height(4.dp))
             Text(track.artist, color = SoftText, fontSize = 12.sp,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Spacer(Modifier.width(6.dp))
         if (selected) {
             Icon(if (playing) Icons.Rounded.GraphicEq else Icons.Rounded.PauseCircleOutline,
-                if (playing) "Now playing" else "Paused", tint = MistWhite, modifier = Modifier.size(21.dp))
-        } else Text(durationString(track.durationMs), color = SoftText, fontSize = 11.sp)
-        Spacer(Modifier.width(6.dp))
+                if (playing) "Playing" else "Paused", tint = MistWhite,
+                modifier = Modifier.size(19.dp))
+        } else {
+            Text(durationString(track.durationMs), color = SoftText, fontSize = 11.sp)
+        }
+        IconButton(onClick = onFavorite, modifier = Modifier.size(44.dp)) {
+            Icon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                if (liked) "Remove from favourites" else "Add to favourites",
+                tint = if (liked) MistWhite else SoftText, modifier = Modifier.size(19.dp))
+        }
     }
 }
 
 @Composable
 private fun UnifiedDock(
     track: AudioTrack?, playing: Boolean, positionState: State<Long>, duration: Long,
-    page: Page, onOpen: () -> Unit, onPlay: () -> Unit, onNext: () -> Unit,
-    onListen: () -> Unit, onLiked: () -> Unit,
+    grouping: Grouping, onGroup: (Grouping) -> Unit,
+    reduceMotion: Boolean,
+    onOpen: () -> Unit, onPlay: () -> Unit, onNext: () -> Unit,
+    canNext: Boolean, canPrevious: Boolean,
+    onSwipeNext: () -> Unit, onSwipePrevious: () -> Unit
 ) {
-    Box(Modifier.fillMaxWidth().padding(horizontal = 18.dp)
-        .shadow(14.dp, RoundedCornerShape(26.dp), clip = false)
-        .clip(RoundedCornerShape(26.dp))) {
-        // Blur is restricted to one artwork surface rather than every song row.
+    Box(Modifier.fillMaxWidth().padding(horizontal = 17.dp)
+        .shadow(13.dp, RoundedCornerShape(25.dp), clip = false)
+        .clip(RoundedCornerShape(25.dp))) {
         if (track != null) {
-            Artwork(track, Modifier.matchParentSize(), corner = 26.dp, blurred = true)
-            Box(Modifier.matchParentSize().background(Color(0xC2162028)))
+            // A single artwork-backed layer, blurred only in this bounded dock.
+            Artwork(track, Modifier.matchParentSize(), 25.dp, blurred = true)
+            Box(Modifier.matchParentSize().background(Color(0xD319232D)))
         } else {
-            Box(Modifier.matchParentSize().background(Color(0xE1111C25)))
+            Box(Modifier.matchParentSize().background(Color(0xE518222C)))
         }
-        // Apply the specular edge *after* artwork and tint, not underneath them.
-        Box(Modifier.matchParentSize().glass(26, bright = true))
+        Box(Modifier.matchParentSize().glass(25, bright = true))
         Column(Modifier.fillMaxWidth()) {
             if (track != null) {
-                Row(Modifier.fillMaxWidth().height(63.dp).clickable(onClick = onOpen)
-                    .padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Artwork(track, Modifier.size(45.dp), corner = 12.dp)
-                    Spacer(Modifier.width(11.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(track.title, color = MistWhite, fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Spacer(Modifier.height(3.dp))
-                        Text(track.artist, color = SoftText, fontSize = 11.sp,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(Modifier.fillMaxWidth().height(64.dp).padding(start = 9.dp, end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.weight(1f).fillMaxHeight()
+                        .trackSwipe(track.id, canNext, canPrevious, onSwipeNext, onSwipePrevious)
+                        .clickable(onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
+                        Artwork(track, Modifier.size(46.dp), 11.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(track.title, fontSize = 13.sp, color = MistWhite,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Spacer(Modifier.height(3.dp))
+                            Text(track.artist, color = SoftText, fontSize = 11.sp,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                     IconButton(onClick = onPlay, modifier = Modifier.size(48.dp)) {
                         Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                            if (playing) "Pause" else "Play", tint = MistWhite, modifier = Modifier.size(26.dp))
+                            if (playing) "Pause" else "Play", tint = MistWhite,
+                            modifier = Modifier.size(25.dp))
                     }
-                    IconButton(onClick = onNext, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Rounded.SkipNext, "Next song", tint = MistWhite, modifier = Modifier.size(25.dp))
+                    IconButton(onClick = onNext, enabled = canNext, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Rounded.SkipNext, "Next track",
+                            tint = if (canNext) MistWhite else SoftText.copy(alpha = 0.45f),
+                            modifier = Modifier.size(24.dp))
                     }
                 }
-                DockProgress(positionState = positionState, duration = duration, playing = playing)
-                Box(Modifier.fillMaxWidth().padding(horizontal = 15.dp).height(0.5.dp)
-                    .background(Color.White.copy(alpha = 0.10f)))
+                DockProgress(positionState, duration, playing)
+                Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(0.6.dp)
+                    .background(Color.White.copy(alpha = 0.11f)))
             }
-            Row(Modifier.fillMaxWidth().height(53.dp).padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                DockNavigation("Listen", Icons.Rounded.Headphones, page == Page.Listen,
-                    Modifier.weight(1f), onListen)
-                DockNavigation("Liked", Icons.Rounded.FavoriteBorder, page == Page.Liked,
-                    Modifier.weight(1f), onLiked)
+            DockTabs(grouping, onGroup, reduceMotion)
+        }
+    }
+}
+
+@Composable
+private fun DockTabs(grouping: Grouping, onGroup: (Grouping) -> Unit, reduceMotion: Boolean) {
+    Row(Modifier.fillMaxWidth().height(57.dp).padding(horizontal = 9.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.width(83.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.LibraryMusic, null, tint = SoftText, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(5.dp))
+            Text("Library", color = SoftText, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+        }
+        BoxWithConstraints(Modifier.weight(1f).height(49.dp)) {
+            val segment = maxWidth / 3
+            val selected = Grouping.entries.indexOf(grouping).coerceAtLeast(0)
+            val x by animateDpAsState(targetValue = segment * selected,
+                animationSpec = if (reduceMotion) snap() else spring(
+                    stiffness = Spring.StiffnessMediumLow,
+                    dampingRatio = Spring.DampingRatioNoBouncy
+                ), label = "moving-dock-highlight")
+            Box(Modifier.offset(x = x).width(segment).height(45.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color.White.copy(alpha = 0.13f))
+                .border(0.65.dp, Color.White.copy(alpha = 0.23f), RoundedCornerShape(16.dp)))
+            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                Grouping.entries.forEach { tab ->
+                    Box(Modifier.weight(1f).fillMaxHeight()
+                        .clickable(onClick = { onGroup(tab) }),
+                        contentAlignment = Alignment.Center) {
+                        Text(tab.name, color = if (grouping == tab) MistWhite else SoftText,
+                            fontSize = 12.sp,
+                            fontWeight = if (grouping == tab) FontWeight.SemiBold else FontWeight.Medium)
+                    }
+                }
             }
         }
     }
@@ -495,19 +570,52 @@ private fun DockProgress(positionState: State<Long>, duration: Long, playing: Bo
     }
 }
 
-@Composable
-private fun DockNavigation(
-    title: String, icon: androidx.compose.ui.graphics.vector.ImageVector,
-    active: Boolean, modifier: Modifier, onClick: () -> Unit
-) {
-    Row(modifier.fillMaxHeight().clickable(onClick = onClick),
-        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, Modifier.size(19.dp), tint = if (active) MistWhite else SoftText)
-        Spacer(Modifier.width(9.dp))
-        Text(title, fontSize = 13.sp, color = if (active) MistWhite else SoftText,
-            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal)
-    }
+
+/**
+ * Touch slop and directional arbitration come from Compose's horizontal detector.
+ * Only artwork and the non-button mini-player region use this modifier. No
+ * gesture is handled by the seek bar, transport controls, or vertical song list.
+ */
+private fun Modifier.trackSwipe(
+    trackId: Long,
+    canNext: Boolean, canPrevious: Boolean,
+    onNext: () -> Unit, onPrevious: () -> Unit
+): Modifier = composed {
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val threshold = with(density) { 72.dp.toPx() }
+    val displacement = remember(trackId) { Animatable(0f) }
+    val nextState = rememberUpdatedState(onNext)
+    val previousState = rememberUpdatedState(onPrevious)
+    this.offset { IntOffset(displacement.value.roundToInt(), 0) }
+        .pointerInput(trackId, canNext, canPrevious) {
+            var drag = 0f
+            detectHorizontalDragGestures(
+                onDragStart = { drag = 0f },
+                onHorizontalDrag = { event, amount ->
+                    drag += amount
+                    event.consume()
+                    scope.launch { displacement.snapTo(drag.coerceIn(-94f, 94f)) }
+                },
+                onDragEnd = {
+                    when (TrackSwipe.decide(drag, 0f, threshold, canNext, canPrevious)) {
+                        SwipeTrackAction.NEXT -> nextState.value()
+                        SwipeTrackAction.PREVIOUS -> previousState.value()
+                        SwipeTrackAction.NONE -> Unit
+                    }
+                    scope.launch {
+                        displacement.animateTo(0f,
+                            spring(dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMedium))
+                    }
+                },
+                onDragCancel = {
+                    scope.launch { displacement.animateTo(0f, spring()) }
+                }
+            )
+        }
 }
+
 
 private fun albumKey(track: AudioTrack): String = if (track.albumId > 0) "album:${track.albumId}" else "${track.album}|${track.artist}"
 
@@ -536,6 +644,10 @@ private fun NowPlaying(
     onFavorite: () -> Unit,
     onQueue: () -> Unit,
     usbDacConnected: Boolean,
+    canNext: Boolean,
+    canPrevious: Boolean,
+    onSwipeNext: () -> Unit,
+    onSwipePrevious: () -> Unit,
 ) {
     var draggedFraction by remember(track.id) { mutableStateOf<Float?>(null) }
     val sampledFraction = (if (duration > 0L) positionState.value.toFloat() / duration else 0f).coerceIn(0f, 1f)
@@ -570,8 +682,10 @@ private fun NowPlaying(
             Spacer(Modifier.height(if (compact) 8.dp else 17.dp).heightIn(min = air))
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Artwork(track,
-                    Modifier.size(coverSize).border(0.7.dp, Color.White.copy(alpha = 0.20f),
-                        RoundedCornerShape(22.dp)),
+                    Modifier.size(coverSize)
+                        .trackSwipe(track.id, canNext, canPrevious,
+                            onSwipeNext, onSwipePrevious)
+                        .border(0.7.dp, Color.White.copy(alpha = 0.20f), RoundedCornerShape(22.dp)),
                     22.dp)
             }
             Spacer(Modifier.height((if (compact) 16.dp else 23.dp) + air))
