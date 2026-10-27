@@ -915,7 +915,7 @@ private fun NowPlaying(
         val compact = maxHeight < 750.dp || fontScale > 1.35f
         val narrow = maxWidth < 375.dp
         // Available-height budget, never a title-character-count heuristic.
-        val reserve = if (compact) 486.dp else 438.dp
+        val reserve = if (compact) 494.dp else 446.dp
         val coverSize = (maxHeight - reserve)
             .coerceAtLeast(142.dp).coerceAtMost(maxWidth - 54.dp).coerceAtMost(350.dp)
         val remaining = (maxHeight - reserve - coverSize).coerceAtLeast(0.dp)
@@ -941,12 +941,21 @@ private fun NowPlaying(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = if (narrow) 18.dp else 24.dp)
         ) {
-            Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().height(62.dp), verticalAlignment = Alignment.CenterVertically) {
                 PlainAction(Icons.Rounded.KeyboardArrowDown, "Close Now Playing", onDismiss)
-                Spacer(Modifier.weight(1f))
-                Text("Now Playing", color = MistWhite, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.weight(1f))
-                Spacer(Modifier.size(48.dp))
+                Spacer(Modifier.width(6.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("PLAYING FROM LIBRARY", color = SoftText, fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+                    Spacer(Modifier.height(3.dp))
+                    Text(track.album.takeUnless { it.isBlank() } ?: "Local music",
+                        color = MistWhite, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                IconButton(onClick = onQueue, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Rounded.QueueMusic, "Open queue", tint = MistWhite,
+                        modifier = Modifier.size(22.dp))
+                }
             }
             Spacer(Modifier.height(if (compact) 8.dp else 17.dp).heightIn(min = air))
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -954,19 +963,32 @@ private fun NowPlaying(
                     scaleX = artScale
                     scaleY = artScale
                 }) {
-                    TrackMotionSurface(
-                        track = track,
-                        previous = previousArtworkTrack,
-                        next = nextArtworkTrack,
-                        reduceMotion = reduceMotion,
-                        canNext = canNext,
-                        canPrevious = canPrevious,
-                        onNext = onSwipeNext,
-                        onPrevious = onSwipePrevious,
-                        modifier = Modifier.size(coverSize),
-                        tag = "now-artwork-swipe-zone"
-                    ) { shown ->
-                        Artwork(shown, Modifier.fillMaxSize(), 18.dp)
+                    val frameShape = RoundedCornerShape(25.dp)
+                    Box(Modifier.size(coverSize + 14.dp)
+                        .shadow(22.dp, frameShape)
+                        .clip(frameShape)
+                        .background(Brush.linearGradient(listOf(
+                            Color.White.copy(alpha = 0.22f),
+                            tint.copy(alpha = 0.42f),
+                            Color.White.copy(alpha = 0.04f)
+                        )))
+                        .border(0.7.dp, Color.White.copy(alpha = 0.24f), frameShape)
+                        .padding(7.dp)
+                    ) {
+                        TrackMotionSurface(
+                            track = track,
+                            previous = previousArtworkTrack,
+                            next = nextArtworkTrack,
+                            reduceMotion = reduceMotion,
+                            canNext = canNext,
+                            canPrevious = canPrevious,
+                            onNext = onSwipeNext,
+                            onPrevious = onSwipePrevious,
+                            modifier = Modifier.fillMaxSize(),
+                            tag = "now-artwork-swipe-zone"
+                        ) { shown ->
+                            Artwork(shown, Modifier.fillMaxSize(), 18.dp)
+                        }
                     }
                 }
             }
@@ -1051,13 +1073,13 @@ private fun NowPlaying(
                         }, tint = if (repeatActive) accent else SoftText, modifier = Modifier.size(22.dp))
                 }
             }
-            Spacer(Modifier.height(if (compact) 3.dp else 12.dp))
-            Row(Modifier.fillMaxWidth().height(48.dp).clickable(onClick = onQueue),
-                horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.QueueMusic, null, tint = MistWhite, modifier = Modifier.size(19.dp))
-                Spacer(Modifier.width(9.dp))
-                Text("Queue", color = MistWhite, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            }
+            Spacer(Modifier.height(18.dp))
+            Box(Modifier.fillMaxWidth().height(1.dp)
+                .background(Brush.horizontalGradient(listOf(
+                    Color.Transparent,
+                    Color.White.copy(alpha = 0.11f),
+                    Color.Transparent
+                ))))
             Spacer(Modifier.height(12.dp))
         }
     }
