@@ -167,7 +167,8 @@ class LazyPlayerUiTest {
     }
 
     @Test fun artworkAndMiniPlayerSwipesDoNotTogglePlayback() {
-        show()
+        // Mock Media3 must acknowledge each seek before a second gesture.
+        show(simulateMedia3Transitions = true)
         rule.onNodeWithTag("mini-swipe-zone").performTouchInput { swipeRight() }
         rule.waitForIdle()
         rule.runOnIdle {
