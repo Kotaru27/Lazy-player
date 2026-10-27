@@ -1,0 +1,90 @@
+name: Publish signed Lazy Player v0.5.6 Motion Carousel
+on:
+  push:
+    branches: ['redesign/v056-artwork-fluidity']
+    paths:
+      - '.github/workflows/publish-v056.yml'
+      - 'tools/reconstruct_signed_v056.py'
+      - 'release/v056_signed_delta.b64'
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  signed-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Prepare Android signing inspection tools
+        run: sdkmanager 'build-tools;35.0.0'
+      - name: Require passed unit build and emulator UI audit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh run view 40539076289 -R "$GITHUB_REPOSITORY" --json conclusion --jq '.conclusion')" = success
+          test "$(gh run view 40539076256 -R "$GITHUB_REPOSITORY" --json conclusion --jq '.conclusion')" = success
+          echo 'The UI test SHA predates only a workflow YAML edit; app+Gradle sources are identical.'
+      - name: Fetch exact tested Android v0.5.6 build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh run download 40539076289 -R "$GITHUB_REPOSITORY" -n lazy-player-0.5.6-preview-apk -D dist
+          echo '1971c9cb6ebd540c1706f7342422db421558384c44a062c1ea8634e32c0e7b92  dist/app-debug.apk' | sha256sum --check
+      - name: Recover owner-signed update from verified public APK patch
+        run: |
+          set -euo pipefail
+          python3 tools/reconstruct_signed_v056.py \
+            dist/app-debug.apk release/v056_signed_delta.b64 dist/LazyPlayer-v0.5.6-Preview.apk
+          echo 'ab60e0d550ddbbd92968b0bd4348cd728a4adb2d3618bc6a3691d9002467eb79  dist/LazyPlayer-v0.5.6-Preview.apk' | sha256sum --check
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/LazyPlayer-v0.5.6-Preview.apk | tee /tmp/v056_badging
+          grep -F "package: name='com.lazy.player.preview'" /tmp/v056_badging
+          grep -F "versionCode='7'" /tmp/v056_badging
+          grep -F "versionName='0.5.6-preview'" /tmp/v056_badging
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs dist/LazyPlayer-v0.5.6-Preview.apk | tee /tmp/v056_certs
+          grep -F '8b329cb559e2ff4e39d3106cd8993af0463ceef7da8adf6fbaece6b4da0f58c4' /tmp/v056_certs
+          (cd dist && sha256sum LazyPlayer-v0.5.6-Preview.apk > SHA256SUMS.txt)
+      - name: Publish only once to immutable GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag='v0.5.6-preview'
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Release already exists: refusing to replace APK'
+            exit 1
+          fi
+          cat >/tmp/notes.md <<'NOTES'
+          ## Lazy Player v0.5.6 — Fluid Carousel Preview
+
+          Install the APK attached to this release on your Android phone. This is the signed real app, not a design mockup.
+
+          - Full Now Playing cover carousel now previews the adjacent track while you drag, settles the incoming artwork, and invokes exactly one track change.
+          - Metadata and mini-player content crossfade when playback changes tracks, with album-driven ambient tint transitions.
+          - Replaced the large live blurred artwork backdrop with GPU-cheaper layered ambient gradients.
+          - Added an instrumented real track-change simulation that checks forward and backward swipes update player metadata.
+          - Preserved Media3 playback, local folder access, FLAC, favourites, shuffle and repeat, queue, USB DAC detection and search.
+
+          **Build & JVM evidence:** [GitHub Actions](https://github.com/Kotaru27/Lazy-player/actions/runs/40539076289). **Rendered UI / gesture tests:** [Android emulator](https://github.com/Kotaru27/Lazy-player/actions/runs/40539076256), 7 tests normal, 7 at 135%, one at 200%.
+
+          Package ID is unchanged: `com.lazy.player.preview`. Version code 7, version name `0.5.6-preview`. Signing certificate SHA-256: `8b329cb559e2ff4e39d3106cd8993af0463ceef7da8adf6fbaece6b4da0f58c4` (same as v0.5.5). Users installed from the stable-key previews can update in place; older debug-signed installations may be incompatible.
+
+          **Not claimed:** verified 90/120Hz physical device frame pacing, actual external USB DAC/FLAC playback, true refractive backdrop glass, or pixel-perfect native shared-element motion. This is a substantive functional motion pass plus lightweight UI polish.
+
+          CI APK source SHA: `a49224b36dba7b73ee456d5aee9c871428793b2a`. CI APK SHA-256: `1971c9cb6ebd540c1706f7342422db421558384c44a062c1ea8634e32c0e7b92`. Signed APK SHA-256: `ab60e0d550ddbbd92968b0bd4348cd728a4adb2d3618bc6a3691d9002467eb79`.
+          Work is on `redesign/v056-fluid-carousel` (main unchanged).
+
+          NOTES
+          gh release create "$tag" \
+            dist/LazyPlayer-v0.5.6-Preview.apk dist/SHA256SUMS.txt \
+            -R "$GITHUB_REPOSITORY" \
+            --target a49224b36dba7b73ee456d5aee9c871428793b2a \
+            --title 'Lazy Player v0.5.6 — Artwork Fluidity' \
+            --notes-file /tmp/notes.md --latest
+          gh release view "$tag" -R "$GITHUB_REPOSITORY" --json url,tagName,assets,isDraft
