@@ -5,7 +5,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <application
-        android:label="Lazy Player Next"
+        android:label="Lazy Player Refined"
         android:icon="@drawable/ic_lazy_player"
         android:roundIcon="@drawable/ic_lazy_player"
         android:allowBackup="false"

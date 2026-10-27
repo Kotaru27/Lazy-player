@@ -394,25 +394,31 @@ private fun NavigationItem(title: String, icon: androidx.compose.ui.graphics.vec
 
 @Composable
 private fun MiniPlayer(track: AudioTrack, playing: Boolean, onPlay: () -> Unit, onNext: () -> Unit, onOpen: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(65.dp).glass(20, bright = true)
-            .clickable(onClick = onOpen).padding(horizontal = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Artwork(track, Modifier.size(46.dp), 12.dp)
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(track.title, color = MistWhite, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(3.dp))
-            Text(track.artist, color = SoftText, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        IconButton(onClick = onPlay, modifier = Modifier.size(44.dp)) {
-            Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                if (playing) "Pause" else "Play", tint = MistWhite, modifier = Modifier.size(25.dp))
-        }
-        IconButton(onClick = onNext, modifier = Modifier.size(44.dp)) {
-            Icon(Icons.Rounded.SkipNext, "Next track", tint = MistWhite, modifier = Modifier.size(23.dp))
+    // Artwork is blurred *inside this single clipped surface*; list rows stay
+    // unblurred and inexpensive. This is a frosted artwork treatment, not a
+    // claim of arbitrary Android backdrop refraction.
+    Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(65.dp)
+        .clip(RoundedCornerShape(20.dp)).glass(20, bright = true)) {
+        Artwork(track, Modifier.fillMaxSize(), corner = 20.dp, blurred = true)
+        Box(Modifier.fillMaxSize().background(Color(0xD2121B24)))
+        Row(Modifier.fillMaxSize().clickable(onClick = onOpen).padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Artwork(track, Modifier.size(46.dp), 12.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(track.title, color = MistWhite, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(3.dp))
+                Text(track.artist, color = SoftText, fontSize = 11.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            IconButton(onClick = onPlay, modifier = Modifier.size(44.dp)) {
+                Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                    if (playing) "Pause" else "Play", tint = MistWhite, modifier = Modifier.size(25.dp))
+            }
+            IconButton(onClick = onNext, modifier = Modifier.size(44.dp)) {
+                Icon(Icons.Rounded.SkipNext, "Next track", tint = MistWhite, modifier = Modifier.size(23.dp))
+            }
         }
     }
 }
@@ -448,10 +454,6 @@ private fun NowPlaying(
     var draggedFraction by remember(track.id) { mutableStateOf<Float?>(null) }
     val fraction = (draggedFraction ?:
         (if (duration > 0L) position.toFloat() / duration else 0f)).coerceIn(0f, 1f)
-    val seekState = rememberSliderState(value = fraction)
-    LaunchedEffect(track.id, fraction) {
-        if (draggedFraction == null) seekState.value = fraction
-    }
     BoxWithConstraints(Modifier.fillMaxSize().background(LazyNight)) {
         val compact = maxHeight < 735.dp
         val narrow = maxWidth < 375.dp
@@ -510,10 +512,10 @@ private fun NowPlaying(
             Spacer(Modifier.height(if (compact) 12.dp else 20.dp))
             // Visually 3 dp, but Slider keeps a tall accessible interactive area.
             Slider(
-                state = seekState,
+                value = fraction,
                 onValueChange = { draggedFraction = it },
                 onValueChangeFinished = {
-                    onSeek((seekState.value.coerceIn(0f, 1f) * duration.coerceAtLeast(0L)).roundToLong())
+                    onSeek(((draggedFraction ?: fraction) * duration.coerceAtLeast(0L)).roundToLong())
                     draggedFraction = null
                 },
                 modifier = Modifier.fillMaxWidth().height(43.dp),
