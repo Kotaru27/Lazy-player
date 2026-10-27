@@ -49,6 +49,9 @@ private sealed interface CoverResult {
 /** Two decodable sizes, 32 MiB in-memory cache, and IO-thread metadata reads. */
 private object CoverCache {
     private val missing = LinkedHashSet<CoverKey>()
+    // Distinct keys may decode concurrently; equal keys share a stripe so a
+    // full-size artwork is never decoded twice by the dock, player and tint.
+    private val loadLocks = Array(16) { Any() }
     private val cache = object : LruCache<CoverKey, Bitmap>(32 * 1024) {
         override fun sizeOf(key: CoverKey, value: Bitmap) = (value.byteCount / 1024).coerceAtLeast(1)
     }
@@ -61,7 +64,15 @@ private object CoverCache {
             cache.get(key)?.let { return it }
             if (key in missing) return null
         }
-        val image = try {
+        // Fast cache lookup above handles the usual path. Recheck after acquiring
+        // the stripe because another composable may have finished this decode.
+        val loadLock = loadLocks[(key.hashCode() and Int.MAX_VALUE) % loadLocks.size]
+        synchronized(loadLock) {
+            synchronized(cache) {
+                cache.get(key)?.let { return it }
+                if (key in missing) return null
+            }
+            val image = try {
             val retriever = MediaMetadataRetriever()
             val raw = try {
                 retriever.setDataSource(context, track.uri)
@@ -88,7 +99,8 @@ private object CoverCache {
                 missing.add(key)
             } else cache.put(key, image)
         }
-        return image
+            return image
+        }
     }
 }
 
@@ -139,6 +151,24 @@ fun Artwork(
                     contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             } else if (!blurred) {
                 MissingCover(track, targetPx, showPlaceholderCaption)
+            }
+        }
+    }
+}
+
+/**
+ * Warm only the neighboring full-size covers while the full player is visible.
+ * Never changes the playback queue, never reads on the main thread. Under
+ * shuffle the caller omits neighbors rather than guessing the queue order.
+ */
+@Composable
+fun PrefetchSwipeArtwork(next: AudioTrack?, previous: AudioTrack?) {
+    val context = LocalContext.current
+    LaunchedEffect(next?.id, previous?.id) {
+        withContext(Dispatchers.IO) {
+            next?.let { CoverCache.read(context, it, 640) }
+            if (previous?.id != next?.id) {
+                previous?.let { CoverCache.read(context, it, 640) }
             }
         }
     }
