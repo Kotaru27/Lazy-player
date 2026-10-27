@@ -133,6 +133,15 @@ fun LazyPlayerScreen(
         result.filter { TrackFilters.matches(it.title, it.artist, it.album, query) }
     }
 
+    val visualIndex = remember(queue, currentTrack?.id) {
+        queue.indexOfFirst { it.id == currentTrack?.id }
+    }
+    // A shuffle sequence is owned by Media3, not the displayed queue order.
+    val previousVisual = if (!shuffle && canPrevious && visualIndex > 0)
+        queue[visualIndex - 1] else null
+    val nextVisual = if (!shuffle && canNext && visualIndex >= 0)
+        queue.getOrNull(visualIndex + 1) else null
+
     val contentTransition = remember { Animatable(1f) }
     LaunchedEffect(grouping, page, selectedGroup, reduceMotion) {
         if (reduceMotion) contentTransition.snapTo(1f)
@@ -277,14 +286,6 @@ fun LazyPlayerScreen(
                     }
                     }
                 }
-                val visualIndex = remember(queue, currentTrack?.id) {
-                    queue.indexOfFirst { it.id == currentTrack?.id }
-                }
-                // Media3 shuffle order cannot be inferred from linear queue indices.
-                val previousVisual = if (!shuffle && canPrevious && visualIndex > 0)
-                    queue[visualIndex - 1] else null
-                val nextVisual = if (!shuffle && canNext && visualIndex >= 0)
-                    queue.getOrNull(visualIndex + 1) else null
                 UnifiedDock(
                     track = currentTrack, playing = playing,
                     previous = previousVisual, next = nextVisual,
