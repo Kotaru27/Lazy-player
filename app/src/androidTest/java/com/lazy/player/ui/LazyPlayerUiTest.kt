@@ -124,8 +124,9 @@ class LazyPlayerUiTest {
             assertEquals(listOf(1L, 2L), selected)
             assertTrue(shuffled)
         }
-        rule.onNodeWithContentDescription("Show favourites").performClick()
+        rule.onNodeWithText("Songs").performClick()
         rule.onAllNodesWithContentDescription("Add to favourites").onFirst().performClick()
+        rule.onNodeWithContentDescription("Show favourites").performClick()
         rule.onNodeWithContentDescription("Play all 1 songs").performClick()
         rule.runOnIdle { assertEquals(1, selected.size) }
     }
