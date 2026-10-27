@@ -3,6 +3,7 @@ package com.lazy.player.ui
 import androidx.activity.compose.BackHandler
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Animatable
@@ -130,7 +131,7 @@ fun LazyPlayerScreen(
     }
 
     val contentTransition = remember { Animatable(1f) }
-    LaunchedEffect(grouping, page, selectedGroup, query, reduceMotion) {
+    LaunchedEffect(grouping, page, selectedGroup, reduceMotion) {
         if (reduceMotion) contentTransition.snapTo(1f)
         else {
             contentTransition.snapTo(0.82f)
@@ -612,6 +613,13 @@ private fun UnifiedDock(
     // one bounded surface and one artwork-derived, low-saturation light source.
     Box(
         Modifier.fillMaxWidth().padding(horizontal = 17.dp)
+            .animateContentSize(
+                animationSpec = if (reduceMotion) snap() else spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                ),
+                label = "mini-player-dock-height"
+            )
             .shadow(8.dp, shape, clip = false)
             .clip(shape)
             .background(Color(0xE9101319))
@@ -929,8 +937,10 @@ private fun NowPlaying(
     onSwipePrevious: () -> Unit,
 ) {
     val tint = rememberArtworkTint(track)
-    var coverEntered by remember(track.id) { mutableStateOf(false) }
-    LaunchedEffect(track.id) { coverEntered = true }
+    // Expand once on opening the player; changing tracks should crossfade
+    // album art rather than repeatedly zoom the whole cover in and out.
+    var coverEntered by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { coverEntered = true }
     val artScale by animateFloatAsState(
         targetValue = if (expanded && coverEntered) 1f else 0.90f,
         animationSpec = tween(if (reduceMotion) 0 else 225, easing = FastOutSlowInEasing),
