@@ -1,0 +1,67 @@
+name: Publish Lazy Player Next 0.2.0 preview
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-next-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download tested immutable build and check package identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh run view 40462771847 --repo "$GITHUB_REPOSITORY" --json conclusion --jq '.conclusion')" = "success"
+          mkdir -p dist
+          gh run download 40462771847 -R "$GITHUB_REPOSITORY" -n lazy-player-debug-apk -D dist
+          test -s dist/app-debug.apk
+          echo "417cb36ec1ffd26b92035ad60d9d968eda1e00856fa2c9fa360892982190e22c  dist/app-debug.apk" | sha256sum --check
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/app-debug.apk | tee /tmp/badging.txt
+          grep -F "package: name='com.lazy.player.next'" /tmp/badging.txt
+          grep -F "versionName='0.2.0-preview'" /tmp/badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose dist/app-debug.apk
+          mv dist/app-debug.apk dist/LazyPlayer-Next-v0.2.0-preview.apk
+          (cd dist && sha256sum LazyPlayer-Next-v0.2.0-preview.apk > SHA256SUMS.txt)
+      - name: Create separate prerelease with the APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="v0.2.0-next-preview.1"
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag exists, refusing replacement"
+            exit 0
+          fi
+          cat > /tmp/release-notes.md <<'NOTES'
+          ## Lazy Player Next — Experimental Android Preview
+
+          **Installs alongside Lazy Player 0.1.1.** Uses a separate Android application ID: `com.lazy.player.next`.
+
+          - Select a folder using Android's system picker; include its nested subfolders. Folder access remains available after relaunch.
+          - FLAC/WAV/MP3/M4A/AAC/OGG/Opus folder inclusion; actual decoding availability is device-dependent.
+          - USB-C DAC presence indicator; high-resolution float PCM output is requested where the Android audio route supports it.
+          - Refined dark slate/opal glass treatment and artwork-aware Now Playing layout.
+          - Preserves library search, favourites, album/artist views, queue, background audio controls and offline playback.
+
+          **Not guaranteed bit-perfect:** USB connection detection does not prove active route, actual sample rate, exclusive DAC use, or bit-perfect output. Hardware verification is still needed.
+          **Release maturity:** Cloud Android compilation and JVM unit tests passed. Real-device FLAC playback and visual smoothness have not been certified.
+          **APK** is signed with the GitHub Actions debug key and is for side-by-side testing, not a production distribution key.
+          **SHA-256:** `417cb36ec1ffd26b92035ad60d9d968eda1e00856fa2c9fa360892982190e22c`.
+          **Build evidence:** [GitHub Actions 40462771847](https://github.com/Kotaru27/Lazy-player/actions/runs/40462771847), commit `071a4a7bbe73d01c89e88f6fc47af8b1b34f39b1`.
+          NOTES
+          gh release create "$tag" \
+            dist/LazyPlayer-Next-v0.2.0-preview.apk dist/SHA256SUMS.txt \
+            -R "$GITHUB_REPOSITORY" \
+            --target 071a4a7bbe73d01c89e88f6fc47af8b1b34f39b1 \
+            --title "Lazy Player Next v0.2 — Folder + USB DAC + Glass Preview" \
+            --notes-file /tmp/release-notes.md --prerelease --latest=false
+          gh release view "$tag" -R "$GITHUB_REPOSITORY" --json url,tagName,assets,isDraft,isPrerelease
