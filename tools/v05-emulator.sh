@@ -33,7 +33,7 @@ first=${PIPESTATUS[0]}
 set -e
 kill "$metrics_pid" >/dev/null 2>&1 || true
 wait "$metrics_pid" >/dev/null 2>&1 || true
-for name in 01-library.png 02-now-playing.png 03-populated-library.png 04-albums.png; do
+for name in 01-library.png 02-now-playing.png 03-populated-library.png 04-albums.png 06-carousel-next-track.png 07-carousel-return-track.png 08-shared-swipe-arrival.png 09-shuffle-transition.png; do
   adb exec-out run-as com.lazy.player.preview cat files/"$name" > evidence/normal/"$name" || true
 done
 adb shell kill -2 "$(adb shell pidof screenrecord | tr -d '\r')" >/dev/null 2>&1 || true
@@ -47,7 +47,7 @@ set +e
 adb shell am instrument -w -r com.lazy.player.preview.test/androidx.test.runner.AndroidJUnitRunner | tee evidence/compact/instrumentation.txt
 second=${PIPESTATUS[0]}
 set -e
-for name in 01-library.png 02-now-playing.png 03-populated-library.png 04-albums.png; do
+for name in 01-library.png 02-now-playing.png 03-populated-library.png 04-albums.png 06-carousel-next-track.png 07-carousel-return-track.png 08-shared-swipe-arrival.png 09-shuffle-transition.png; do
   adb exec-out run-as com.lazy.player.preview cat files/"$name" > evidence/compact/"$name" || true
 done
 # Targeted 200% font check on 320dp width, independent of normal-size run.
