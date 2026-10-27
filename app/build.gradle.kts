@@ -12,8 +12,8 @@ android {
         applicationId = "com.lazy.player.preview"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.5.6-preview"
+        versionCode = 8
+        versionName = "0.5.7-preview"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
