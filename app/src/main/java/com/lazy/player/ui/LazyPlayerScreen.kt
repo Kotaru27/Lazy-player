@@ -439,12 +439,16 @@ private fun UnifiedDock(
 ) {
     Box(Modifier.fillMaxWidth().padding(horizontal = 18.dp)
         .shadow(14.dp, RoundedCornerShape(26.dp), clip = false)
-        .glass(26, bright = true)) {
+        .clip(RoundedCornerShape(26.dp))) {
+        // Blur is restricted to one artwork surface rather than every song row.
         if (track != null) {
-            // A single blurred artwork layer within the unified dock, not per-button blur.
             Artwork(track, Modifier.matchParentSize(), corner = 26.dp, blurred = true)
-            Box(Modifier.matchParentSize().background(Color(0xD9162028)))
+            Box(Modifier.matchParentSize().background(Color(0xC2162028)))
+        } else {
+            Box(Modifier.matchParentSize().background(Color(0xE1111C25)))
         }
+        // Apply the specular edge *after* artwork and tint, not underneath them.
+        Box(Modifier.matchParentSize().glass(26, bright = true))
         Column(Modifier.fillMaxWidth()) {
             if (track != null) {
                 Row(Modifier.fillMaxWidth().height(63.dp).clickable(onClick = onOpen)
