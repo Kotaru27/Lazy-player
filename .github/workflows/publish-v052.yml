@@ -1,0 +1,81 @@
+name: Publish signed Lazy Player v0.5.2 to Releases
+on:
+  push:
+    branches: ['redesign/opal-v052']
+    paths:
+      - '.github/workflows/publish-v052.yml'
+      - 'tools/reconstruct_signed_v052.py'
+      - 'release/v052_signed_delta.b64'
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Prepare Android package and signing tools
+        run: sdkmanager 'build-tools;35.0.0'
+      - name: Download the exact passing v0.5.2 APK from GitHub CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh run view 40481649244 -R "$GITHUB_REPOSITORY" --json conclusion --jq '.conclusion')" = success
+          mkdir -p dist
+          gh run download 40481649244 -R "$GITHUB_REPOSITORY" -n lazy-player-0.5.2-preview-apk -D dist
+          test -s dist/app-debug.apk
+          echo "700f8c77004833c5174de09e4ca70081e86c292f20ba97f80f18ee916076abed  dist/app-debug.apk" | sha256sum --check
+      - name: Restore and authenticate the private-signed update APK
+        run: |
+          set -euo pipefail
+          python3 tools/reconstruct_signed_v052.py dist/app-debug.apk release/v052_signed_delta.b64 dist/LazyPlayer-v0.5.2-Opal-Preview.apk
+          echo "a168bc7cc715b1ea9e97bf842a31569c2a8868fb2704fa75f2e1bc1a73196866  dist/LazyPlayer-v0.5.2-Opal-Preview.apk" | sha256sum --check
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/LazyPlayer-v0.5.2-Opal-Preview.apk | tee /tmp/app-info.txt
+          grep -F "package: name='com.lazy.player.preview'" /tmp/app-info.txt
+          grep -F "versionCode='3'" /tmp/app-info.txt
+          grep -F "versionName='0.5.2-preview'" /tmp/app-info.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs dist/LazyPlayer-v0.5.2-Opal-Preview.apk | tee /tmp/cert.txt
+          grep -F "8b329cb559e2ff4e39d3106cd8993af0463ceef7da8adf6fbaece6b4da0f58c4" /tmp/cert.txt
+          (cd dist && sha256sum LazyPlayer-v0.5.2-Opal-Preview.apk > SHA256SUMS.txt)
+      - name: Publish the verified APK as the latest GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=v0.5.2-preview
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release already exists; refusing to overwrite it"
+            exit 1
+          fi
+          cat >/tmp/release-notes.md <<'NOTES'
+          ## Lazy Player v0.5.2 — Opal redesign preview
+
+          **Download the signed Android APK under Assets.** This release is intended for installing on a phone, rather than using ChatGPT sandbox links.
+
+          New in v0.5.2: a neutral charcoal library, Songs/Favourites dropdown, cleaner track menus, responsive two-column album grid, artist counts, quieter opal dock, muted artwork-derived backgrounds, refined no-cover artwork with initials, and improved Now Playing spacing and background fading. FLAC playback and the existing Media3 audio implementation are not changed.
+
+          **Upgrade without creating a new app:** package `com.lazy.player.preview`, versionCode `3` (v0.5.1 was 2). Uses the **same retained signing certificate** as the signed v0.5.1 GitHub Release. Android should recognize it as an upgrade to that signed v0.5.1 Preview. If you still use the original debug-signed v0.5.0 Preview, Android cannot upgrade it because its signing key differs.
+
+          **Verification:** [JVM tests + Android APK build passed](https://github.com/Kotaru27/Lazy-player/actions/runs/40481649244), [5/5 Android emulator UI tests passed at normal and 135% text](https://github.com/Kotaru27/Lazy-player/actions/runs/40481649498), [additional 200% text and populated-library check passed](https://github.com/Kotaru27/Lazy-player/actions/runs/40482412173). USB DAC behavior on a physical device and optimized release-build frame timings remain unverified.
+
+          **Material caveat:** this is a restrained, frosted-artwork opal fallback. Genuine live backdrop refraction, continuous artwork geometry and adjacent-cover swipe animation are not certified and are not being claimed in this release.
+
+          Package: `com.lazy.player.preview`
+          Version: `0.5.2-preview` / versionCode `3`
+          Tested app source commit: `c1ee2619af88fe0cf4accc4dadf6e5908cb218da`
+          Signed APK SHA-256: `a168bc7cc715b1ea9e97bf842a31569c2a8868fb2704fa75f2e1bc1a73196866`
+          Signing certificate SHA-256: `8b329cb559e2ff4e39d3106cd8993af0463ceef7da8adf6fbaece6b4da0f58c4`
+
+          No merge to `main`; the release is built from the review branch and is intended for user evaluation.
+          NOTES
+          gh release create "$tag" dist/LazyPlayer-v0.5.2-Opal-Preview.apk dist/SHA256SUMS.txt \
+            -R "$GITHUB_REPOSITORY" --target c1ee2619af88fe0cf4accc4dadf6e5908cb218da \
+            --title "Lazy Player v0.5.2 — Opal Redesign" \
+            --notes-file /tmp/release-notes.md --latest
+          gh release view "$tag" -R "$GITHUB_REPOSITORY" --json url,tagName,assets,isDraft,isPrerelease
