@@ -19,7 +19,7 @@ Inky plum-black background, album-art ambience, warm-white text, subtle lavender
 
 ## Build without a local Android SDK
 
-The project has a `.github/workflows/android.yml` workflow. See `docs/CLOUD_BUILD.md` for a no-install browser-only build path. In a GitHub repository, committing the project to `main` triggers a cloud build. The **lazy-player-debug-apk** artifact will appear under that Actions run **if compilation and tests succeed**. The workflow is present, but **no cloud build has been run here**. The ZIP itself is source, **not an installable APK**. It intentionally excludes any proprietary APK binary.
+The project has a `.github/workflows/android.yml` workflow. See `docs/CLOUD_BUILD.md` for a no-install browser-only build path. In a GitHub repository, committing the project to `main` triggers a cloud build. The **lazy-player-debug-apk** artifact is produced by GitHub Actions. The Android build and unit-test job passed on October 27, 2026, at commit `736cc00` (run `40454507448`). This is a cloud-compiled **debug APK**, not a production-signed release. No proprietary Poweramp APK code or resources are included.
 
 ## Scope boundaries / next milestone
 

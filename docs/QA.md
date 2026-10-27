@@ -1,32 +1,29 @@
 # QA record — Lazy Player v0.1.1
 
-## Completed within this response
+## Verified — 2026-10-27
 
-- Uploaded Poweramp APK inspected at ZIP metadata level (3825 entries, approximately 21.9 MiB; `META-INF/ZACKMODZ.RSA` present). **Signature authenticity/security NOT established**. No binary or resources imported from it.
-- Source-level review: MediaStore query, audio permission split, no Internet permission, ExoPlayer service, MediaSession connection, app refresh action, persistent favourites, 7 pure track-filter checks.
-- Kotlin `TrackFilters.kt` compiled and executed with `kotlinc` 1.9.0: **7/7 runtime checks passed**.
-- Android manifest parsed as valid XML.
-- Seven static project invariants checked: offline/no Internet, media permissions, media service, refresh wiring and local scan.
-- Kotlin source delimiter balance checked for all authored `.kt` files. This is *not* Android compilation.
+- Source committed to the public repository `Kotaru27/Lazy-player` with package `com.lazy.player`.
+- GitHub Actions run [40454507448](https://github.com/Kotaru27/Lazy-player/actions/runs/40454507448) completed **successfully** at commit `736cc00e88f7f8bc53e7901106a9436c986d39e9`; Android compilation and `:app:testDebugUnitTest` and `:app:assembleDebug` all ran successfully.
+- Debug artifact downloaded and archive integrity checked; unpacked APK SHA-256: `a64956c2aab9014b5c0b9c89e873b05fa8c27d64f3ad44870ba81de451edc416`.
+- AndroidManifest.xml inspected: local music permissions, MediaSessionService, and **no INTERNET permission**.
+- Kotlin screen and service source inspected; MediaStore scans occur off the UI thread; the player uses Media3 session for background operation.
+- Static colour-token contrast calculated: main text vs base ≈18.24:1; secondary text vs base ≈8.86:1.
+- False-empty state during library scan and queue-index drift from missing queued items patched; both compiled successfully at the commit above.
+- The previous first Android build also succeeded at commit `8c515c9`, after repairing incompatible Gradle Kotlin options, a non-published Compose BOM, and a Material3 opt-in.
 
-## Not run / not verified
+## Verification still required
 
-- Gradle/Android dependency resolution and APK assembly: no Android SDK/Gradle runner configured in current execution environment.
-- Android emulator/device functional test, audio quality, lock-screen notifications, headsets, Bluetooth, Android 8–16 behavior, smoothness at 60/100/120Hz.
-- Real cross-device MediaStore query; folder edge cases, metadata fallback, play/queue interactions under permission revocation.
-- GitHub Actions cloud workflow: specified in source but not triggered (dedicated repository is now available; new build run not yet verified).
+- An actual installation and audio playback on physical Android hardware, including MP3/FLAC, lock-screen media controls, audio focus, Bluetooth, headset unplugging, and background restrictions.
+- Measured 60/90/120 Hz jank traces or GPU profiling. The full-screen artwork blur was reduced to 62% of height, but frame-time improvement has **not** been measured.
+- Screenshot quality and accessibility verification across different phones, Android versions, large fonts, long titles, missing cover images and landscape orientation.
+- A stable signing identity is needed before distributing seamless upgrades. Current CI debug APKs are not production-signed.
+- Permission revocation during playback and large MediaStore libraries are not device-tested.
 
-## Critical reviewer notes
+## Visual QA execution
 
-- A local source code archive is not evidence of an installable app. Cloud build and device acceptance tests are release gates.
-- Layered glass is visually inspired by the reference, not a literal implementation of iOS Liquid Glass / pixel-accurate refraction.
-- No guarantee of codec playback on a given phone; ExoPlayer relies on Android supported decoders for many formats.
-- The bundled Poweramp APK signature label is unusual and should not be treated as a verified official release.
+- First emulator run [40453227842](https://github.com/Kotaru27/Lazy-player/actions/runs/40453227842) did not reach the app because emulator external storage was not mounted. It does **not** establish an application bug or app UI pass.
+- Corrected emulator test harness in [40454323121](https://github.com/Kotaru27/Lazy-player/actions/runs/40454323121), using a single Bash test script and a virtual SD card. Its screenshots must be inspected before any visual-release claim.
 
-## Build candidate review — 2026-10-27
+## Conclusion
 
-- Updated Android Gradle plugin to `8.13.2` for compatibility with Kotlin `2.3.0`.
-- Added explicit `androidx.compose.animation:animation` dependency used by `AnimatedVisibility`.
-- Pure Kotlin filter file compiled with installed Kotlin compiler 1.9; seven manual runtime smoke assertions passed.
-- See `docs/CLOUD_BUILD.md` for the GitHub Actions build path.
-- Android application compilation **NOT RUN**: cloud container lacks Gradle/Android SDK, downloads failed, and the dedicated GitHub repository exists, but no successful Android build is yet confirmed. This is a build **candidate**, not an APK or verified release.
+**Build verified; real-device, rendered-UI and premium-motion certification remain conditional.** A source review cannot prove iOS-like optical liquid-glass refraction or a perfectly elegant app. See `docs/LIQUID_GLASS_AUDIT.md` for actionable design findings.
