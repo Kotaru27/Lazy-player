@@ -2,6 +2,7 @@ package com.lazy.player.playback
 
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -12,7 +13,9 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        val player = ExoPlayer.Builder(this).build().apply {
+        // High resolution float PCM where supported, not a bit-perfect or exclusive USB claim.
+        val renderers = DefaultRenderersFactory(this).setEnableAudioFloatOutput(true).setEnableDecoderFallback(true)
+        val player = ExoPlayer.Builder(this, renderers).build().apply {
             setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)

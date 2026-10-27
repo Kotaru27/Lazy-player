@@ -14,6 +14,7 @@ data class AudioTrack(
     val albumId: Long,
     val durationMs: Long,
     val dateAdded: Long,
+    val filename: String = "",
 ) {
     fun toMediaItem(): MediaItem = MediaItem.Builder()
         .setMediaId(id.toString())

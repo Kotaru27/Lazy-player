@@ -1,8 +1,8 @@
 package com.lazy.player.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -13,31 +13,43 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
-val LazyNight = Color(0xFF0C0A14)
-val MistWhite = Color(0xFFF8F5FF)
-val SoftText = Color(0xFFB2ABBF)
-val Lavender = Color(0xFFD3BFFF)
+// Slate and opal; no saturated purple wash.
+val LazyNight = Color(0xFF0B1016)
+val MistWhite = Color(0xFFF7F9FB)
+val SoftText = Color(0xFFAEBDC9)
+val Lavender = Color(0xFFDDECF4)
 
-/** Intentional light-rimmed translucency; ambient artwork below produces frosted depth. */
+/**
+ * Three-layer glass approximation: smoked translucent body, bright upper specular
+ * rim, soft shadow. Neither this nor Compose claims real backdrop refraction.
+ */
 fun Modifier.glass(radius: Int = 26, bright: Boolean = false): Modifier {
     val shape = RoundedCornerShape(radius.dp)
-    // Restrained glass: shaded body, specular rim and an inner highlight.
-    // Artwork is softened once underneath; each control stays a cheap drawing.
     return this.clip(shape)
         .background(
             Brush.linearGradient(
-                if (bright) listOf(Color(0xFF776788).copy(alpha = 0.52f), Color(0xFF201D30).copy(alpha = 0.82f))
-                else listOf(Color(0xFF554A66).copy(alpha = 0.42f), Color(0xFF1A1828).copy(alpha = 0.71f))
+                listOf(
+                    Color(0xFF69879A).copy(alpha = if (bright) 0.44f else 0.24f),
+                    Color(0xFF243541).copy(alpha = if (bright) 0.87f else 0.73f),
+                    Color(0xFF111C25).copy(alpha = 0.92f)
+                )
             )
         )
         .background(
             Brush.verticalGradient(
-                listOf(Color.White.copy(alpha = if (bright) 0.18f else 0.12f), Color.Transparent, Color.Black.copy(alpha = 0.10f))
+                0f to Color.White.copy(alpha = if (bright) 0.19f else 0.12f),
+                0.22f to Color.White.copy(alpha = 0.045f),
+                0.7f to Color.Transparent,
+                1f to Color.Black.copy(alpha = 0.24f)
             )
         )
         .border(
             1.dp,
-            Brush.linearGradient(listOf(Color.White.copy(alpha = 0.55f), Lavender.copy(alpha = 0.17f), Color.White.copy(alpha = 0.10f))),
+            Brush.verticalGradient(
+                0f to Color.White.copy(alpha = if (bright) 0.63f else 0.41f),
+                0.35f to Color.White.copy(alpha = 0.14f),
+                1f to Color.White.copy(alpha = 0.07f)
+            ),
             shape
         )
 }
@@ -45,16 +57,24 @@ fun Modifier.glass(radius: Int = 26, bright: Boolean = false): Modifier {
 @Composable
 fun AmbientHaze(modifier: Modifier = Modifier) {
     Canvas(modifier.fillMaxSize()) {
-        drawRect(color = LazyNight)
+        drawRect(LazyNight)
         drawCircle(
-            brush = Brush.radialGradient(listOf(Color(0xFF48335E).copy(alpha = 0.67f), Color.Transparent), center = Offset(size.width * 0.87f, size.height * 0.10f), radius = size.width * 1.05f),
-            center = Offset(size.width * 0.87f, size.height * 0.10f),
-            radius = size.width * 1.05f
+            brush = Brush.radialGradient(
+                listOf(Color(0xFF365B6C).copy(alpha = 0.34f), Color.Transparent),
+                center = Offset(size.width * 0.91f, size.height * 0.12f),
+                radius = size.width * 0.85f
+            ),
+            center = Offset(size.width * 0.91f, size.height * 0.12f),
+            radius = size.width * 0.85f
         )
         drawCircle(
-            brush = Brush.radialGradient(listOf(Color(0xFF253E5E).copy(alpha = 0.28f), Color.Transparent), center = Offset(size.width * 0.03f, size.height * 0.82f), radius = size.width * 0.9f),
-            center = Offset(size.width * 0.03f, size.height * 0.82f),
-            radius = size.width * 0.9f
+            brush = Brush.radialGradient(
+                listOf(Color(0xFF364959).copy(alpha = 0.21f), Color.Transparent),
+                center = Offset(size.width * 0.03f, size.height * 0.94f),
+                radius = size.width * 0.90f
+            ),
+            center = Offset(size.width * 0.03f, size.height * 0.94f),
+            radius = size.width * 0.90f
         )
     }
 }

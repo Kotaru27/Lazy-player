@@ -16,6 +16,7 @@ object MusicLibrary {
             MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.DATE_ADDED,
+            MediaStore.Audio.Media.DISPLAY_NAME,
         )
         val tracks = mutableListOf<AudioTrack>()
         try {
@@ -33,6 +34,7 @@ object MusicLibrary {
                 val albumId = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
                 val duration = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
                 val date = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+                val name = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
                 while (cursor.moveToNext()) {
                     val trackId = cursor.getLong(id)
                     tracks += AudioTrack(
@@ -44,6 +46,7 @@ object MusicLibrary {
                         albumId = cursor.getLong(albumId),
                         durationMs = cursor.getLong(duration),
                         dateAdded = cursor.getLong(date),
+                        filename = cursor.getString(name).orEmpty(),
                     )
                 }
             }

@@ -44,6 +44,11 @@ fun LazyPlayerScreen(
     tracks: List<AudioTrack>,
     hasPermission: Boolean,
     libraryLoading: Boolean,
+    folderName: String?,
+    folderError: String?,
+    usbDacConnected: Boolean,
+    onChooseFolder: () -> Unit,
+    onUseAllMusic: () -> Unit,
     onPermission: () -> Unit,
     currentTrack: AudioTrack?,
     playing: Boolean,
@@ -100,6 +105,8 @@ fun LazyPlayerScreen(
                             }
                         }
                         Spacer(Modifier.weight(1f))
+                        SoftIcon(Icons.Rounded.FolderOpen, "Select music folder", onClick = onChooseFolder)
+                        Spacer(Modifier.width(8.dp))
                         SoftIcon(if (search) Icons.Rounded.Close else Icons.Rounded.Search, "Search", onClick = {
                             search = !search
                             if (!search) query = ""
@@ -130,8 +137,38 @@ fun LazyPlayerScreen(
                     if (selectedGroup == null) {
                         Text(if (page == Page.Listen) "Listen." else "Your favourites.", modifier = Modifier.padding(horizontal = 26.dp), fontSize = 36.sp, color = MistWhite, fontWeight = FontWeight.Light, letterSpacing = (-1.3).sp)
                         Spacer(Modifier.height(8.dp))
-                        Text(if (page == Page.Listen) "A little space for everything you love." else "The music you come back to.", modifier = Modifier.padding(horizontal = 27.dp), fontSize = 13.sp, color = SoftText)
-                        Spacer(Modifier.height(30.dp))
+                        Text(if (page == Page.Listen) "Local music. Nothing in the way." else "The music you come back to.", modifier = Modifier.padding(horizontal = 27.dp), fontSize = 13.sp, color = SoftText)
+                        Spacer(Modifier.height(18.dp))
+                        if (page == Page.Listen) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 24.dp).glass(20, bright = true)
+                                    .padding(horizontal = 14.dp, vertical = 11.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Rounded.FolderOpen, null, tint = Lavender, modifier = Modifier.size(20.dp))
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(folderName ?: "All music", color = MistWhite, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(if (folderName == null) "Tap to choose a FLAC folder" else "Only this folder + subfolders", color = SoftText, fontSize = 11.sp)
+                                }
+                                Box(Modifier.clip(CircleShape).clickable(onClick = onChooseFolder).padding(10.dp)) {
+                                    Icon(Icons.Rounded.Edit, "Change folder", tint = MistWhite, modifier = Modifier.size(22.dp))
+                                }
+                                if (folderName != null) {
+                                    Box(Modifier.clip(CircleShape).clickable(onClick = onUseAllMusic).padding(10.dp)) {
+                                        Icon(Icons.Rounded.Close, "Use all music", tint = MistWhite, modifier = Modifier.size(22.dp))
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 27.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.Headphones, null, tint = Lavender, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(if (usbDacConnected) "USB-C DAC connected · Android audio" else "System audio output · USB DAC not detected",
+                                    color = SoftText, fontSize = 11.sp)
+                            }
+                        }
+                        Spacer(Modifier.height(20.dp))
                         if (page == Page.Listen) {
                             Row(
                                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 24.dp),
@@ -153,9 +190,10 @@ fun LazyPlayerScreen(
                         Spacer(Modifier.height(22.dp))
                     }
                     when {
-                        !hasPermission -> IntroState(onPermission)
+                        !hasPermission -> IntroState(onPermission, onChooseFolder)
                         libraryLoading && tracks.isEmpty() -> LoadingLibrary()
-                        tracks.isEmpty() -> EmptyLibrary(onRefresh)
+                        folderError != null && tracks.isEmpty() -> FolderError(folderError, onChooseFolder)
+                        tracks.isEmpty() -> EmptyLibrary(onRefresh, folderName, onChooseFolder)
                         filtered.isEmpty() -> NoResults(page == Page.Liked)
                         selectedGroup == null && page == Page.Listen && grouping != Grouping.Songs -> {
                             val groups = remember(filtered, grouping) {
@@ -208,7 +246,7 @@ fun LazyPlayerScreen(
                         liked = track.id in favorites,
                         onDismiss = { fullPlayer = false }, onPlay = onTogglePlay, onNext = onNext, onPrevious = onPrevious,
                         onSeek = onSeek, onShuffle = onShuffle, onRepeat = onRepeat, onFavorite = { onToggleFavorite(track.id) },
-                        onQueue = { showQueue = true }
+                        onQueue = { showQueue = true }, usbDacConnected = usbDacConnected
                     )
                 }
             }
@@ -232,16 +270,20 @@ fun LazyPlayerScreen(
 }
 
 @Composable
-private fun IntroState(onPermission: () -> Unit) {
+private fun IntroState(onPermission: () -> Unit, onChooseFolder: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 26.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Icon(Icons.Rounded.LibraryMusic, null, Modifier.size(62.dp), tint = Lavender)
         Spacer(Modifier.height(28.dp))
         Text("Make room for music.", color = MistWhite, fontSize = 25.sp, fontWeight = FontWeight.Light)
         Spacer(Modifier.height(10.dp))
-        Text("Give Lazy Player access to the audio on your phone. Nothing gets uploaded.", color = SoftText, fontSize = 14.sp, lineHeight = 21.sp, modifier = Modifier.padding(horizontal = 24.dp))
+        Text("Select a music folder or grant access to your complete on-device library. Nothing gets uploaded.", color = SoftText, fontSize = 14.sp, lineHeight = 21.sp, modifier = Modifier.padding(horizontal = 24.dp))
         Spacer(Modifier.height(29.dp))
         Box(Modifier.clip(CircleShape).background(MistWhite).clickable(onClick = onPermission).padding(horizontal = 26.dp, vertical = 16.dp)) {
-            Text("Open my library", color = LazyNight, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text("All songs on this phone", color = LazyNight, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        }
+        Spacer(Modifier.height(12.dp))
+        Box(Modifier.glass(24, bright = true).clickable(onClick = onChooseFolder).padding(horizontal = 24.dp, vertical = 15.dp)) {
+            Text("Choose my FLAC folder", color = MistWhite, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -256,16 +298,33 @@ private fun LoadingLibrary() {
 }
 
 @Composable
-private fun EmptyLibrary(onRefresh: () -> Unit) {
+private fun FolderError(message: String, onChooseFolder: () -> Unit) {
+    Column(Modifier.fillMaxWidth().fillMaxHeight().padding(30.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Icon(Icons.Rounded.FolderOff, null, tint = Lavender, modifier = Modifier.size(42.dp))
+        Spacer(Modifier.height(15.dp))
+        Text(message, color = SoftText, fontSize = 14.sp, lineHeight = 21.sp)
+        Spacer(Modifier.height(18.dp))
+        Box(Modifier.glass(24).clickable(onClick = onChooseFolder).padding(16.dp)) {
+            Text("Choose music folder", color = MistWhite, fontSize = 14.sp)
+        }
+    }
+}
+
+@Composable
+private fun EmptyLibrary(onRefresh: () -> Unit, folderName: String?, onChooseFolder: () -> Unit) {
     Column(Modifier.fillMaxWidth().fillMaxHeight().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Icon(Icons.Rounded.MusicOff, null, tint = Lavender, modifier = Modifier.size(46.dp))
         Spacer(Modifier.height(20.dp))
         Text("Nothing here yet", color = MistWhite, fontSize = 22.sp, fontWeight = FontWeight.Light)
         Spacer(Modifier.height(8.dp))
-        Text("Add songs to your phone's Music folder, then refresh your library.", color = SoftText, fontSize = 13.sp, lineHeight = 20.sp)
+        Text(if (folderName != null) "No supported audio files in this folder. Try a different folder." else "Add music to your phone or select a folder.", color = SoftText, fontSize = 13.sp, lineHeight = 20.sp)
         Spacer(Modifier.height(24.dp))
         Box(Modifier.glass(24).clickable(onClick = onRefresh).padding(horizontal = 24.dp, vertical = 13.dp)) {
             Text("Refresh", color = MistWhite, fontSize = 13.sp)
+        }
+        Spacer(Modifier.height(10.dp))
+        Box(Modifier.clickable(onClick = onChooseFolder).padding(14.dp)) {
+            Text("Choose another folder", color = Lavender, fontSize = 13.sp)
         }
     }
 }
@@ -368,6 +427,7 @@ private fun NowPlaying(
     onRepeat: () -> Unit,
     onFavorite: () -> Unit,
     onQueue: () -> Unit,
+    usbDacConnected: Boolean,
 ) {
     var draggedFraction by remember(track.id) { mutableStateOf<Float?>(null) }
     val fraction = (draggedFraction ?: (if (duration > 0) position.toFloat() / duration else 0f)).coerceIn(0f, 1f)
@@ -376,7 +436,7 @@ private fun NowPlaying(
         val narrow = maxWidth < 380.dp
         val coverSize = (maxHeight - (if (compact) 475.dp else 525.dp)).coerceIn(170.dp, 370.dp).coerceAtMost(maxWidth - 64.dp)
         Artwork(track, Modifier.fillMaxWidth().height(maxHeight * 0.62f), corner = 0.dp, blurred = true)
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xC9100D1A), Color(0xE20E0C16), Color(0xFC0D0B14)))))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xB90A121A), Color(0xE70A1118), Color(0xFF0B1016)))))
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = if (narrow) 20.dp else 30.dp)) {
             Row(Modifier.fillMaxWidth().padding(top = 18.dp), verticalAlignment = Alignment.CenterVertically) {
                 SoftIcon(Icons.Rounded.KeyboardArrowDown, "Close player", onDismiss)
@@ -384,7 +444,7 @@ private fun NowPlaying(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("NOW PLAYING", fontSize = 11.sp, color = SoftText, letterSpacing = 2.4.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(6.dp))
-                    Text("From your library", fontSize = 12.sp, color = MistWhite)
+                    Text("Lossless listening", fontSize = 12.sp, color = MistWhite)
                 }
                 Spacer(Modifier.weight(1f))
                 SoftIcon(Icons.Rounded.QueueMusic, "Open playback queue", onQueue)
@@ -392,7 +452,7 @@ private fun NowPlaying(
             Spacer(Modifier.height(if (compact) 15.dp else 26.dp))
             BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 val size = maxWidth.coerceAtMost(coverSize)
-                Artwork(track, Modifier.size(size).border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(28.dp)), 28.dp)
+                Artwork(track, Modifier.size(size).border(1.dp, Color.White.copy(alpha = 0.40f), RoundedCornerShape(28.dp)), 28.dp)
             }
             Spacer(Modifier.height(if (compact) 20.dp else 30.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -405,7 +465,19 @@ private fun NowPlaying(
                     Icon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (liked) "Remove from favourites" else "Add to favourites", tint = if (liked) Lavender else MistWhite, modifier = Modifier.size(23.dp))
                 }
             }
-            Spacer(Modifier.height(if (compact) 10.dp else 25.dp))
+            Spacer(Modifier.height(14.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val format = track.filename.substringAfterLast('.', "").uppercase().ifBlank { "AUDIO" }
+                Box(Modifier.glass(10).padding(horizontal = 12.dp, vertical = 7.dp)) {
+                    Text(format, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp, color = MistWhite)
+                }
+                Spacer(Modifier.width(10.dp))
+                Icon(Icons.Rounded.Headphones, null, tint = Lavender, modifier = Modifier.size(17.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (usbDacConnected) "USB DAC connected" else "Android audio",
+                    color = SoftText, fontSize = 11.sp)
+            }
+            Spacer(Modifier.height(if (compact) 10.dp else 19.dp))
             Slider(
                 value = fraction,
                 onValueChange = { draggedFraction = it },
