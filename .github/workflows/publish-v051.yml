@@ -1,0 +1,88 @@
+name: Publish owner-signed Lazy Player v0.5.1 to Releases
+on:
+  push:
+    branches: ['redesign/music-glass-v05']
+    paths:
+      - '.github/workflows/publish-v051.yml'
+      - 'tools/reconstruct_signed_v051.py'
+      - 'release/v051_signed_delta.b64'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Prepare Android signing verification tools
+        run: sdkmanager 'build-tools;35.0.0'
+      - name: Download the exact passing 0.5.1 APK from CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh run view 40475202310 -R "$GITHUB_REPOSITORY" --json conclusion --jq '.conclusion')" = "success"
+          mkdir -p dist
+          gh run download 40475202310 -R "$GITHUB_REPOSITORY" -n lazy-player-0.5-preview-apk -D dist
+          test -s dist/app-debug.apk
+          echo "2bedaf38071e1990c15c500041256e6e2966d7541c77ee4201d2006031d0ea66  dist/app-debug.apk" | sha256sum --check
+      - name: Reconstruct the verified owner-signed APK without private key
+        run: |
+          set -euo pipefail
+          python3 tools/reconstruct_signed_v051.py dist/app-debug.apk release/v051_signed_delta.b64 dist/LazyPlayer-v0.5.1-Preview-Update.apk
+          echo "348b72be36a9268941afe77d90fbdafa8609347401f0949cd479e746a85c5708  dist/LazyPlayer-v0.5.1-Preview-Update.apk" | sha256sum --check
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/LazyPlayer-v0.5.1-Preview-Update.apk | tee /tmp/app-info.txt
+          grep -F "package: name='com.lazy.player.preview'" /tmp/app-info.txt
+          grep -F "versionCode='2'" /tmp/app-info.txt
+          grep -F "versionName='0.5.1-preview'" /tmp/app-info.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs dist/LazyPlayer-v0.5.1-Preview-Update.apk | tee /tmp/signature.txt
+          grep -F "8b329cb559e2ff4e39d3106cd8993af0463ceef7da8adf6fbaece6b4da0f58c4" /tmp/signature.txt
+          (cd dist && sha256sum LazyPlayer-v0.5.1-Preview-Update.apk > SHA256SUMS.txt)
+      - name: Create GitHub Release with exact verified APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="v0.5.1-preview"
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            existing="$(gh release view "$tag" -R "$GITHUB_REPOSITORY" --json assets --jq '[.assets[].name] | join(",")')"
+            if [[ "$existing" == *"LazyPlayer-v0.5.1-Preview-Update.apk"* ]]; then
+              echo "Release already includes the intended APK: refusing overwrite"
+              gh release view "$tag" -R "$GITHUB_REPOSITORY" --json url,assets
+              exit 0
+            fi
+            echo "A release with this tag already exists without the intended APK: refusing unsafe override"
+            exit 1
+          fi
+          cat > /tmp/release-notes.md <<'NOTES'
+          ## Lazy Player v0.5.1 — Android Music & Glass Preview
+
+          **Latest signed APK — stable package ID `com.lazy.player.preview`.**
+          Download `LazyPlayer-v0.5.1-Preview-Update.apk` from **Assets**.
+
+          **Includes** redesigned adaptive icon + themed monochrome icon; a compact library with folder menu beside Search; library Songs / Albums / Artists glass dock; compact Play All / Shuffle; album-art swipe gestures for Next / Previous; artwork-derived restrained tint; preserved FLAC library, background Media3 playback, USB DAC detection, folder access and favourites.
+
+          **Installation note:** The earlier 0.5.0 preview was signed with an ephemeral debug key that was not retained. Android will not upgrade that one build directly. If you already installed 0.5.0 Preview, uninstall **only Lazy Player Preview** once before installing this 0.5.1 version. After 0.5.1, future previews using the same saved private certificate and a higher versionCode can update in place. Your FLAC files are not deleted.
+
+          **Verification:** [Android CI (passed)](https://github.com/Kotaru27/Lazy-player/actions/runs/40475202310) and [cloud emulator Android UI tests (4/4 at both normal and 135% text)](https://github.com/Kotaru27/Lazy-player/actions/runs/40474898426). Not certified on physical USB DAC, no measured release-build jank, and no claim of real optical refraction.
+
+          **Package:** `com.lazy.player.preview` · **versionName:** `0.5.1-preview` · **versionCode:** `2`.
+
+          **Owner-signed APK SHA-256:** `348b72be36a9268941afe77d90fbdafa8609347401f0949cd479e746a85c5708`.
+          **Signing certificate SHA-256:** `8b329cb559e2ff4e39d3106cd8993af0463ceef7da8adf6fbaece6b4da0f58c4`.
+
+          **Preview:** This is a signed test release, not a Play Store production build. Source remains on review branch `redesign/music-glass-v05`; `main` has not been merged or modified for this release.
+          NOTES
+          gh release create "$tag" dist/LazyPlayer-v0.5.1-Preview-Update.apk dist/SHA256SUMS.txt \
+            -R "$GITHUB_REPOSITORY" --target c45fa0d1c531f44baf9ac908fe6049dee2ab365d \
+            --title "Lazy Player v0.5.1 — Signed Android Preview" \
+            --notes-file /tmp/release-notes.md \
+            --latest
+          gh release view "$tag" -R "$GITHUB_REPOSITORY" --json url,assets,isDraft,isPrerelease
