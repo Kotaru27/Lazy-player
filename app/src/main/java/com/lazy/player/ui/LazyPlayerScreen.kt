@@ -2,6 +2,8 @@ package com.lazy.player.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -21,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -52,13 +55,14 @@ fun LazyPlayerScreen(
     onPermission: () -> Unit,
     currentTrack: AudioTrack?,
     playing: Boolean,
-    position: Long,
+    positionState: State<Long>,
     duration: Long,
     shuffle: Boolean,
     repeatMode: Int,
     favorites: Set<Long>,
     onRefresh: () -> Unit,
     onPlayTrack: (AudioTrack, List<AudioTrack>) -> Unit,
+    onPlayCollection: (List<AudioTrack>, Boolean) -> Unit,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -163,6 +167,12 @@ fun LazyPlayerScreen(
                             fontSize = 12.sp, color = SoftText)
                     }
                     Spacer(Modifier.height(7.dp))
+                    if (hasPermission && !libraryLoading && filtered.isNotEmpty()) {
+                        CollectionActions(filtered.size,
+                            onPlay = { onPlayCollection(filtered, false) },
+                            onShuffle = { onPlayCollection(filtered, true) })
+                        Spacer(Modifier.height(6.dp))
+                    }
                     when {
                         !hasPermission -> IntroState(onPermission, onChooseFolder)
                         libraryLoading && tracks.isEmpty() -> LoadingLibrary()
@@ -189,34 +199,31 @@ fun LazyPlayerScreen(
                                     }
                                 }
                                 items(filtered, key = { it.id }) { track ->
-                                    TrackRow(track, selected = currentTrack?.id == track.id, onClick = { onPlayTrack(track, filtered) })
+                                    TrackRow(track, selected = currentTrack?.id == track.id, playing = playing, onClick = { onPlayTrack(track, filtered) })
                                 }
                             }
                         }
                     }
                 }
-                if (currentTrack != null) {
-                    MiniPlayer(currentTrack, playing, onTogglePlay, onNext, onOpen = { fullPlayer = true })
-                    Spacer(Modifier.height(7.dp))
-                }
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(56.dp).glass(28)
-                        .padding(horizontal = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    NavigationItem("Listen", Icons.Rounded.Headphones, page == Page.Listen, Modifier.weight(1f)) { page = Page.Listen; selectedGroup = null; query = "" }
-                    NavigationItem("Liked", Icons.Rounded.FavoriteBorder, page == Page.Liked, Modifier.weight(1f)) { page = Page.Liked; selectedGroup = null; query = "" }
-                }
+                UnifiedDock(
+                    track = currentTrack, playing = playing,
+                    positionState = positionState, duration = duration,
+                    page = page,
+                    onOpen = { fullPlayer = true },
+                    onPlay = onTogglePlay, onNext = onNext,
+                    onListen = { page = Page.Listen; selectedGroup = null; query = "" },
+                    onLiked = { page = Page.Liked; selectedGroup = null; query = "" }
+                )
                 Spacer(Modifier.height(8.dp))
             }
             AnimatedVisibility(
                 visible = fullPlayer && currentTrack != null,
-                enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(350)) + fadeIn(tween(350)),
-                exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(300)) + fadeOut(tween(300))
+                enter = slideInVertically(initialOffsetY = { it / 3 }, animationSpec = tween(320)) + fadeIn(tween(250)),
+                exit = slideOutVertically(targetOffsetY = { it / 3 }, animationSpec = tween(240)) + fadeOut(tween(210))
             ) {
                 currentTrack?.let { track ->
                     NowPlaying(
-                        track, playing, position, duration, shuffle, repeatMode,
+                        track, playing, positionState, duration, shuffle, repeatMode,
                         liked = track.id in favorites,
                         onDismiss = { fullPlayer = false }, onPlay = onTogglePlay, onNext = onNext, onPrevious = onPrevious,
                         onSeek = onSeek, onShuffle = onShuffle, onRepeat = onRepeat, onFavorite = { onToggleFavorite(track.id) },
@@ -234,7 +241,7 @@ fun LazyPlayerScreen(
                     Text("Up next", Modifier.padding(start = 26.dp, top = 25.dp, bottom = 18.dp), fontSize = 26.sp, fontWeight = FontWeight.Light)
                     LazyColumn(Modifier.fillMaxWidth().heightIn(max = 460.dp), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 36.dp)) {
                         items(queue.size) { index ->
-                            TrackRow(queue[index], selected = currentTrack?.id == queue[index].id, onClick = { onQueueSelection(index); showQueue = false })
+                            TrackRow(queue[index], selected = currentTrack?.id == queue[index].id, playing = playing, onClick = { onQueueSelection(index); showQueue = false })
                         }
                     }
                 }
@@ -252,9 +259,10 @@ private fun PlainAction(icon: androidx.compose.ui.graphics.vector.ImageVector, l
 
 @Composable
 private fun FolderSourceRow(folderName: String?, onChooseFolder: () -> Unit, onUseAllMusic: () -> Unit) {
+    var optionsOpen by remember { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(48.dp)
-            .clip(RoundedCornerShape(15.dp)).background(Color.White.copy(alpha = 0.055f)),
+            .clip(RoundedCornerShape(15.dp)).background(Color.White.copy(alpha = 0.045f)),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(Modifier.weight(1f).fillMaxHeight().clickable(onClick = onChooseFolder).padding(start = 14.dp),
@@ -264,13 +272,45 @@ private fun FolderSourceRow(folderName: String?, onChooseFolder: () -> Unit, onU
             Text(folderName ?: "Choose music folder", modifier = Modifier.weight(1f),
                 color = MistWhite, fontWeight = FontWeight.Medium, fontSize = 13.sp,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Icon(Icons.Rounded.ChevronRight, "Change folder", tint = SoftText, modifier = Modifier.size(19.dp))
         }
-        if (folderName != null) {
-            IconButton(onClick = onUseAllMusic, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Rounded.Close, "Use all music instead", tint = SoftText, modifier = Modifier.size(18.dp))
+        Box {
+            IconButton(onClick = { optionsOpen = true }, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Rounded.MoreVert, "Music folder options", tint = SoftText, modifier = Modifier.size(21.dp))
             }
-        } else Spacer(Modifier.width(13.dp))
+            DropdownMenu(expanded = optionsOpen, onDismissRequest = { optionsOpen = false },
+                modifier = Modifier.background(Color(0xFF17232C))) {
+                DropdownMenuItem(text = { Text("Choose folder") }, onClick = {
+                    optionsOpen = false; onChooseFolder()
+                }, leadingIcon = { Icon(Icons.Rounded.FolderOpen, null) })
+                if (folderName != null) {
+                    DropdownMenuItem(text = { Text("Use all music") }, onClick = {
+                        optionsOpen = false; onUseAllMusic()
+                    }, leadingIcon = { Icon(Icons.Rounded.LibraryMusic, null) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CollectionActions(size: Int, onPlay: () -> Unit, onShuffle: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 21.dp).height(48.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.height(42.dp).clip(CircleShape).background(MistWhite)
+            .clickable(onClick = onPlay).padding(horizontal = 17.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.PlayArrow, null, tint = LazyNight, modifier = Modifier.size(19.dp))
+            Spacer(Modifier.width(5.dp))
+            Text("Play all", color = LazyNight, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
+        Row(Modifier.height(42.dp).clip(CircleShape).clickable(onClick = onShuffle)
+            .padding(horizontal = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Shuffle, null, tint = MistWhite, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(7.dp))
+            Text("Shuffle", color = MistWhite, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        }
+        Spacer(Modifier.weight(1f))
+        Text(size.toString() + " tracks", color = SoftText, fontSize = 11.sp)
     }
 }
 
@@ -363,63 +403,105 @@ private fun GroupRow(title: String, tracks: List<AudioTrack>, onClick: () -> Uni
 }
 
 @Composable
-private fun TrackRow(track: AudioTrack, selected: Boolean, onClick: () -> Unit) {
+private fun TrackRow(track: AudioTrack, selected: Boolean, playing: Boolean, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(RoundedCornerShape(13.dp))
-            .then(if (selected) Modifier.background(Color.White.copy(alpha = 0.055f)) else Modifier)
-            .clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 7.dp),
+            .clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        Box(Modifier.width(3.dp).height(27.dp).clip(CircleShape)
+            .background(if (selected) MistWhite else Color.Transparent))
+        Spacer(Modifier.width(6.dp))
         Artwork(track, Modifier.size(49.dp), 12.dp)
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(11.dp))
         Column(Modifier.weight(1f)) {
-            Text(track.title, color = if (selected) MistWhite else MistWhite, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(track.title, color = MistWhite, fontSize = 14.sp,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(5.dp))
-            Text(track.artist, color = SoftText, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(track.artist, color = SoftText, fontSize = 12.sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Spacer(Modifier.width(8.dp))
-        Text(durationString(track.durationMs), color = SoftText, fontSize = 11.sp)
+        Spacer(Modifier.width(6.dp))
+        if (selected) {
+            Icon(if (playing) Icons.Rounded.GraphicEq else Icons.Rounded.PauseCircleOutline,
+                if (playing) "Now playing" else "Paused", tint = MistWhite, modifier = Modifier.size(21.dp))
+        } else Text(durationString(track.durationMs), color = SoftText, fontSize = 11.sp)
         Spacer(Modifier.width(6.dp))
     }
 }
 
 @Composable
-private fun NavigationItem(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, active: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Row(modifier.fillMaxHeight().clip(CircleShape).background(if (active) Color.White.copy(alpha = 0.075f) else Color.Transparent).clickable(onClick = onClick), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, Modifier.size(20.dp), tint = if (active) MistWhite else SoftText)
-        Spacer(Modifier.width(9.dp))
-        Text(title, fontSize = 13.sp, color = if (active) MistWhite else SoftText, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal)
+private fun UnifiedDock(
+    track: AudioTrack?, playing: Boolean, positionState: State<Long>, duration: Long,
+    page: Page, onOpen: () -> Unit, onPlay: () -> Unit, onNext: () -> Unit,
+    onListen: () -> Unit, onLiked: () -> Unit,
+) {
+    Box(Modifier.fillMaxWidth().padding(horizontal = 18.dp)
+        .shadow(14.dp, RoundedCornerShape(26.dp), clip = false)
+        .glass(26, bright = true)) {
+        if (track != null) {
+            // A single blurred artwork layer within the unified dock, not per-button blur.
+            Artwork(track, Modifier.matchParentSize(), corner = 26.dp, blurred = true)
+            Box(Modifier.matchParentSize().background(Color(0xD9162028)))
+        }
+        Column(Modifier.fillMaxWidth()) {
+            if (track != null) {
+                Row(Modifier.fillMaxWidth().height(63.dp).clickable(onClick = onOpen)
+                    .padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Artwork(track, Modifier.size(45.dp), corner = 12.dp)
+                    Spacer(Modifier.width(11.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(track.title, color = MistWhite, fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(3.dp))
+                        Text(track.artist, color = SoftText, fontSize = 11.sp,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    IconButton(onClick = onPlay, modifier = Modifier.size(48.dp)) {
+                        Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                            if (playing) "Pause" else "Play", tint = MistWhite, modifier = Modifier.size(26.dp))
+                    }
+                    IconButton(onClick = onNext, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Rounded.SkipNext, "Next song", tint = MistWhite, modifier = Modifier.size(25.dp))
+                    }
+                }
+                DockProgress(positionState = positionState, duration = duration, playing = playing)
+                Box(Modifier.fillMaxWidth().padding(horizontal = 15.dp).height(0.5.dp)
+                    .background(Color.White.copy(alpha = 0.10f)))
+            }
+            Row(Modifier.fillMaxWidth().height(53.dp).padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                DockNavigation("Listen", Icons.Rounded.Headphones, page == Page.Listen,
+                    Modifier.weight(1f), onListen)
+                DockNavigation("Liked", Icons.Rounded.FavoriteBorder, page == Page.Liked,
+                    Modifier.weight(1f), onLiked)
+            }
+        }
     }
 }
 
 @Composable
-private fun MiniPlayer(track: AudioTrack, playing: Boolean, onPlay: () -> Unit, onNext: () -> Unit, onOpen: () -> Unit) {
-    // Artwork is blurred *inside this single clipped surface*; list rows stay
-    // unblurred and inexpensive. This is a frosted artwork treatment, not a
-    // claim of arbitrary Android backdrop refraction.
-    Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(65.dp)
-        .clip(RoundedCornerShape(20.dp)).glass(20, bright = true)) {
-        Artwork(track, Modifier.fillMaxSize(), corner = 20.dp, blurred = true)
-        Box(Modifier.fillMaxSize().background(Color(0xD2121B24)))
-        Row(Modifier.fillMaxSize().clickable(onClick = onOpen).padding(horizontal = 10.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Artwork(track, Modifier.size(46.dp), 12.dp)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(track.title, color = MistWhite, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(3.dp))
-                Text(track.artist, color = SoftText, fontSize = 11.sp,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            IconButton(onClick = onPlay, modifier = Modifier.size(44.dp)) {
-                Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                    if (playing) "Pause" else "Play", tint = MistWhite, modifier = Modifier.size(25.dp))
-            }
-            IconButton(onClick = onNext, modifier = Modifier.size(44.dp)) {
-                Icon(Icons.Rounded.SkipNext, "Next track", tint = MistWhite, modifier = Modifier.size(23.dp))
-            }
-        }
+private fun DockProgress(positionState: State<Long>, duration: Long, playing: Boolean) {
+    val progress = if (duration > 0L) positionState.value.toFloat() / duration else 0f
+    val fraction by animateFloatAsState(progress.coerceIn(0f, 1f),
+        animationSpec = tween(if (playing) 490 else 0, easing = LinearEasing), label = "dock-progress")
+    Box(Modifier.fillMaxWidth().height(2.dp).background(Color.White.copy(alpha = 0.08f))) {
+        Box(Modifier.fillMaxWidth(fraction).fillMaxHeight().background(MistWhite.copy(alpha = 0.82f)))
+    }
+}
+
+@Composable
+private fun DockNavigation(
+    title: String, icon: androidx.compose.ui.graphics.vector.ImageVector,
+    active: Boolean, modifier: Modifier, onClick: () -> Unit
+) {
+    Row(modifier.fillMaxHeight().clickable(onClick = onClick),
+        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, Modifier.size(19.dp), tint = if (active) MistWhite else SoftText)
+        Spacer(Modifier.width(9.dp))
+        Text(title, fontSize = 13.sp, color = if (active) MistWhite else SoftText,
+            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal)
     }
 }
 
@@ -435,7 +517,7 @@ private fun durationString(ms: Long): String {
 private fun NowPlaying(
     track: AudioTrack,
     playing: Boolean,
-    position: Long,
+    positionState: State<Long>,
     duration: Long,
     shuffle: Boolean,
     repeatMode: Int,
@@ -452,77 +534,89 @@ private fun NowPlaying(
     usbDacConnected: Boolean,
 ) {
     var draggedFraction by remember(track.id) { mutableStateOf<Float?>(null) }
-    val fraction = (draggedFraction ?:
-        (if (duration > 0L) position.toFloat() / duration else 0f)).coerceIn(0f, 1f)
+    val sampledFraction = (if (duration > 0L) positionState.value.toFloat() / duration else 0f).coerceIn(0f, 1f)
+    val smoothFraction by animateFloatAsState(
+        targetValue = sampledFraction,
+        animationSpec = tween(if (playing) 490 else 0, easing = LinearEasing),
+        label = "now-playing-progress"
+    )
+    val fraction = (draggedFraction ?: smoothFraction).coerceIn(0f, 1f)
     BoxWithConstraints(Modifier.fillMaxSize().background(LazyNight)) {
-        val compact = maxHeight < 735.dp
+        val compact = maxHeight < 740.dp
         val narrow = maxWidth < 375.dp
-        val coverSize = (maxHeight * if (compact) 0.34f else 0.40f)
-            .coerceAtMost(maxWidth - 68.dp).coerceIn(160.dp, 358.dp)
-        // One bounded album-art haze supplies depth behind the opaque content.
-        Artwork(track, Modifier.fillMaxWidth().height(maxHeight * 0.50f), corner = 0.dp, blurred = true)
+        val air = ((maxHeight - 755.dp) / 3f).coerceIn(0.dp, 38.dp)
+        val coverSize = (maxHeight * if (compact) 0.34f else 0.39f)
+            .coerceAtMost(maxWidth - 58.dp).coerceIn(162.dp, 356.dp)
+        Artwork(track, Modifier.fillMaxWidth().height(maxHeight * 0.49f), corner = 0.dp, blurred = true)
         Box(Modifier.fillMaxSize().background(
-            Brush.verticalGradient(listOf(Color(0xBB0B1016), Color(0xDF0B1016), LazyNight))
+            Brush.verticalGradient(listOf(Color(0xAF0B1016), Color(0xE50B1016), LazyNight))
         ))
         Column(
             Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = if (narrow) 20.dp else 26.dp)
+                .padding(horizontal = if (narrow) 18.dp else 24.dp)
         ) {
-            Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
                 PlainAction(Icons.Rounded.KeyboardArrowDown, "Close Now Playing", onDismiss)
                 Spacer(Modifier.weight(1f))
-                Text("Now Playing", color = MistWhite, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text("Now Playing", color = MistWhite, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.weight(1f))
-                PlainAction(Icons.Rounded.QueueMusic, "Open queue", onQueue)
+                Spacer(Modifier.size(48.dp))
             }
-            Spacer(Modifier.height(if (compact) 10.dp else 22.dp))
+            Spacer(Modifier.height(if (compact) 8.dp else 17.dp).heightIn(min = air))
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Artwork(track,
-                    Modifier.size(coverSize).border(0.75.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(22.dp)),
-                    22.dp
-                )
+                    Modifier.size(coverSize).border(0.7.dp, Color.White.copy(alpha = 0.20f),
+                        RoundedCornerShape(22.dp)),
+                    22.dp)
             }
-            Spacer(Modifier.height(if (compact) 18.dp else 28.dp))
+            Spacer(Modifier.height((if (compact) 16.dp else 23.dp) + air))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(track.title, color = MistWhite,
-                        fontSize = if (compact) 21.sp else 24.sp, lineHeight = if (compact) 25.sp else 29.sp,
-                        fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        fontSize = if (compact) 21.sp else 24.sp,
+                        lineHeight = if (compact) 26.sp else 29.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(5.dp))
-                    Text(track.artist, color = SoftText, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(track.artist, color = SoftText, fontSize = 14.sp,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 IconButton(onClick = onFavorite, modifier = Modifier.size(48.dp)) {
                     Icon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                        if (liked) "Remove favourite" else "Add favourite", tint = if (liked) MistWhite else SoftText,
-                        modifier = Modifier.size(23.dp))
+                        if (liked) "Remove from favourites" else "Add to favourites",
+                        tint = if (liked) MistWhite else SoftText, modifier = Modifier.size(23.dp))
                 }
             }
-            Spacer(Modifier.height(13.dp))
+            Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val format = track.filename.substringAfterLast('.', "").uppercase().ifBlank { "AUDIO" }
                 Text(format, color = MistWhite, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.width(9.dp))
                 Box(Modifier.size(3.dp).clip(CircleShape).background(SoftText))
                 Spacer(Modifier.width(9.dp))
-                Icon(Icons.Rounded.Headphones, null, tint = SoftText, modifier = Modifier.size(15.dp))
+                Icon(Icons.Rounded.Headphones, null, tint = SoftText, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
-                Text(if (usbDacConnected) "USB DAC detected" else "Android audio", color = SoftText, fontSize = 11.sp)
+                Text(if (usbDacConnected) "USB DAC detected" else "Android audio",
+                    color = SoftText, fontSize = 11.sp)
             }
-            Spacer(Modifier.height(if (compact) 12.dp else 20.dp))
-            // Visually 3 dp, but Slider keeps a tall accessible interactive area.
+            Spacer(Modifier.height((if (compact) 8.dp else 14.dp) + air))
+            // A thin rail and small thumb inside the normal 48dp Material3 touch area.
             Slider(
                 value = fraction,
                 onValueChange = { draggedFraction = it },
                 onValueChangeFinished = {
-                    onSeek(((draggedFraction ?: fraction) * duration.coerceAtLeast(0L)).roundToLong())
+                    if (duration > 0L) {
+                        onSeek(((draggedFraction ?: fraction) * duration).roundToLong())
+                    }
                     draggedFraction = null
                 },
-                modifier = Modifier.fillMaxWidth().height(43.dp),
+                enabled = duration > 0L,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
                 thumb = { Box(Modifier.size(11.dp).clip(CircleShape).background(MistWhite)) },
                 track = { state ->
                     Box(Modifier.fillMaxWidth().height(3.dp).clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.20f))) {
+                        .background(Color.White.copy(alpha = 0.23f))) {
                         Box(Modifier.fillMaxWidth(state.value.coerceIn(0f, 1f)).fillMaxHeight()
                             .background(MistWhite))
                     }
@@ -532,31 +626,50 @@ private fun NowPlaying(
                 Text(durationString((fraction * duration).roundToLong()), color = SoftText, fontSize = 11.sp)
                 Text(durationString(duration), color = SoftText, fontSize = 11.sp)
             }
-            Spacer(Modifier.height(if (compact) 10.dp else 17.dp))
+            Spacer(Modifier.height(if (compact) 14.dp else 20.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onShuffle, modifier = Modifier.size(44.dp)) {
-                    Icon(Icons.Rounded.Shuffle, "Shuffle", tint = if (shuffle) MistWhite else SoftText,
-                        modifier = Modifier.size(21.dp))
+                val accent = Color(0xFFD2E9F4)
+                IconButton(onClick = onShuffle,
+                    modifier = Modifier.size(47.dp).clip(CircleShape)
+                        .background(if (shuffle) accent.copy(alpha = 0.20f) else Color.Transparent)) {
+                    Icon(Icons.Rounded.Shuffle, if (shuffle) "Shuffle on" else "Shuffle off",
+                        tint = if (shuffle) accent else SoftText, modifier = Modifier.size(22.dp))
                 }
                 IconButton(onClick = onPrevious, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Rounded.SkipPrevious, "Previous", tint = MistWhite, modifier = Modifier.size(32.dp))
+                    Icon(Icons.Rounded.SkipPrevious, "Previous", tint = MistWhite,
+                        modifier = Modifier.size(31.dp))
                 }
-                Box(Modifier.size(if (narrow) 65.dp else 69.dp).clip(CircleShape)
+                Box(Modifier.size(if (narrow) 64.dp else 68.dp).clip(CircleShape)
                     .background(MistWhite).clickable(onClick = onPlay), contentAlignment = Alignment.Center) {
                     Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                         if (playing) "Pause" else "Play", tint = LazyNight, modifier = Modifier.size(34.dp))
                 }
                 IconButton(onClick = onNext, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Rounded.SkipNext, "Next", tint = MistWhite, modifier = Modifier.size(32.dp))
+                    Icon(Icons.Rounded.SkipNext, "Next", tint = MistWhite,
+                        modifier = Modifier.size(31.dp))
                 }
-                IconButton(onClick = onRepeat, modifier = Modifier.size(44.dp)) {
-                    Icon(if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-                        "Repeat", tint = if (repeatMode == Player.REPEAT_MODE_OFF) SoftText else MistWhite,
-                        modifier = Modifier.size(21.dp))
+                val repeatActive = repeatMode != Player.REPEAT_MODE_OFF
+                IconButton(onClick = onRepeat,
+                    modifier = Modifier.size(47.dp).clip(CircleShape)
+                        .background(if (repeatActive) accent.copy(alpha = 0.20f) else Color.Transparent)) {
+                    Icon(if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne
+                        else Icons.Rounded.Repeat,
+                        when (repeatMode) {
+                            Player.REPEAT_MODE_ONE -> "Repeat one"
+                            Player.REPEAT_MODE_ALL -> "Repeat all"
+                            else -> "Repeat off"
+                        }, tint = if (repeatActive) accent else SoftText, modifier = Modifier.size(22.dp))
                 }
             }
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(if (compact) 6.dp else 12.dp))
+            Row(Modifier.fillMaxWidth().height(47.dp).clickable(onClick = onQueue),
+                horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.QueueMusic, null, tint = MistWhite, modifier = Modifier.size(19.dp))
+                Spacer(Modifier.width(9.dp))
+                Text("Queue", color = MistWhite, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            }
+            Spacer(Modifier.height(12.dp))
         }
     }
 }

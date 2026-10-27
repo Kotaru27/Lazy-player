@@ -26,6 +26,7 @@ import com.lazy.player.data.AudioTrack
 import com.lazy.player.data.Favorites
 import com.lazy.player.data.MusicLibrary
 import com.lazy.player.data.FolderLibrary
+import com.lazy.player.data.CollectionPlayback
 import com.lazy.player.data.rememberUsbDacConnected
 import com.lazy.player.ui.LazyPlayerScreen
 import kotlinx.coroutines.delay
@@ -45,7 +46,6 @@ class MainActivity : ComponentActivity() {
 private data class PlayerView(
     val mediaId: String? = null,
     val playing: Boolean = false,
-    val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val shuffle: Boolean = false,
@@ -54,7 +54,6 @@ private data class PlayerView(
 private fun observe(controller: MediaController): PlayerView = PlayerView(
     mediaId = controller.currentMediaItem?.mediaId,
     playing = controller.isPlaying,
-    positionMs = controller.currentPosition.coerceAtLeast(0),
     durationMs = controller.duration.coerceAtLeast(0),
     repeatMode = controller.repeatMode,
     shuffle = controller.shuffleModeEnabled,
@@ -90,6 +89,8 @@ private fun LazyPlayerApplication() {
     var refreshTick by remember { mutableIntStateOf(0) }
     var controller by remember { mutableStateOf<MediaController?>(null) }
     var state by remember { mutableStateOf(PlayerView()) }
+    // The 500ms tick invalidates only composables that read this State, not the library screen.
+    val positionState = remember { mutableLongStateOf(0L) }
     var queueRevision by remember { mutableIntStateOf(0) }
     var favorites by remember { mutableStateOf(Favorites(context).ids()) }
 
@@ -150,19 +151,24 @@ private fun LazyPlayerApplication() {
         } else {
             val listener = object : Player.Listener {
                 override fun onEvents(player: Player, events: Player.Events) {
-                    state = observe(c)
+                    val current = observe(c)
+                    if (state != current) state = current
+                    positionState.longValue = c.currentPosition.coerceAtLeast(0L)
                     if (events.contains(Player.EVENT_TIMELINE_CHANGED)) queueRevision++
                 }
             }
             c.addListener(listener)
             state = observe(c)
+            positionState.longValue = c.currentPosition.coerceAtLeast(0L)
             onDispose { c.removeListener(listener) }
         }
     }
     LaunchedEffect(controller) {
         val c = controller ?: return@LaunchedEffect
         while (true) {
-            state = observe(c)
+            val current = observe(c)
+            if (state != current) state = current
+            positionState.longValue = c.currentPosition.coerceAtLeast(0L)
             delay(500)
         }
     }
@@ -182,7 +188,10 @@ private fun LazyPlayerApplication() {
         hasPermission = granted || folderUri != null,
         libraryLoading = libraryLoading,
         folderName = folderUri?.let { uri ->
-            runCatching { DocumentsContract.getTreeDocumentId(uri).substringAfterLast('/').ifBlank { "Selected folder" } }
+            runCatching {
+                DocumentsContract.getTreeDocumentId(uri)
+                    .substringAfterLast(':').substringAfterLast('/').ifBlank { "Music" }
+            }
                 .getOrDefault("Selected folder")
         },
         folderError = folderError,
@@ -196,7 +205,7 @@ private fun LazyPlayerApplication() {
         onPermission = { permissionLauncher.launch(permission) },
         currentTrack = currentTrack,
         playing = state.playing,
-        position = state.positionMs,
+        positionState = positionState,
         duration = state.durationMs,
         shuffle = state.shuffle,
         repeatMode = state.repeatMode,
@@ -207,6 +216,18 @@ private fun LazyPlayerApplication() {
                 val index = queue.indexOfFirst { it.id == track.id }
                 if (index >= 0) {
                     c.setMediaItems(queue.map { it.toMediaItem() }, index, 0L)
+                    c.prepare()
+                    c.play()
+                }
+            }
+        },
+        onPlayCollection = { collection, shuffleCollection ->
+            controller?.let { c ->
+                if (collection.isNotEmpty()) {
+                    val index = CollectionPlayback.startIndex(collection.size, shuffleCollection)
+                    c.shuffleModeEnabled = false
+                    c.setMediaItems(collection.map { it.toMediaItem() }, index, 0L)
+                    c.shuffleModeEnabled = shuffleCollection
                     c.prepare()
                     c.play()
                 }
