@@ -1172,7 +1172,7 @@ private fun NowPlaying(
                 Crossfade(
                     targetState = track,
                     animationSpec = tween(if (reduceMotion) 0 else 190),
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).testTag("now-track-details"),
                     label = "now-track-metadata"
                 ) { displayed ->
                     Column {
