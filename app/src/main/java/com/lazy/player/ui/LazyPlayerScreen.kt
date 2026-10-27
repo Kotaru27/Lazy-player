@@ -415,7 +415,7 @@ private fun SoftIcon(image: androidx.compose.ui.graphics.vector.ImageVector, lab
 @Composable
 private fun GroupRow(title: String, tracks: List<AudioTrack>, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 70.dp).clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(horizontal = 7.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Artwork(tracks.firstOrNull(), Modifier.size(54.dp), 13.dp)
+        Artwork(tracks.firstOrNull(), Modifier.size(54.dp), 13.dp, targetPx = 192)
         Spacer(Modifier.width(13.dp))
         Column(Modifier.weight(1f)) {
             Text(title, color = MistWhite, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
@@ -439,7 +439,7 @@ private fun TrackRow(
         Box(Modifier.width(2.dp).height(26.dp).clip(CircleShape)
             .background(if (selected) MistWhite else Color.Transparent))
         Spacer(Modifier.width(7.dp))
-        Artwork(track, Modifier.size(49.dp), 12.dp)
+        Artwork(track, Modifier.size(49.dp), 12.dp, targetPx = 192)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(track.title, color = MistWhite, fontSize = 14.sp,
@@ -473,13 +473,16 @@ private fun UnifiedDock(
     canNext: Boolean, canPrevious: Boolean,
     onSwipeNext: () -> Unit, onSwipePrevious: () -> Unit
 ) {
+    val tint = rememberArtworkTint(track)
     Box(Modifier.fillMaxWidth().padding(horizontal = 17.dp)
         .shadow(13.dp, RoundedCornerShape(25.dp), clip = false)
         .clip(RoundedCornerShape(25.dp))) {
         if (track != null) {
-            // A single artwork-backed layer, blurred only in this bounded dock.
-            Artwork(track, Modifier.matchParentSize(), 25.dp, blurred = true)
-            Box(Modifier.matchParentSize().background(Color(0xD319232D)))
+            // Artwork is softly blurred only in this bounded dock on supported APIs.
+            // Older Android versions keep an opaque, high-contrast fallback.
+            Artwork(track, Modifier.matchParentSize(), 25.dp, blurred = true, targetPx = 192)
+            Box(Modifier.matchParentSize().background(tint.copy(alpha = 0.15f)))
+            Box(Modifier.matchParentSize().background(Color(0xBC19232D)))
         } else {
             Box(Modifier.matchParentSize().background(Color(0xE518222C)))
         }
@@ -491,7 +494,7 @@ private fun UnifiedDock(
                     Row(Modifier.weight(1f).fillMaxHeight()
                         .trackSwipe(track.id, canNext, canPrevious, onSwipeNext, onSwipePrevious)
                         .clickable(onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
-                        Artwork(track, Modifier.size(46.dp), 11.dp)
+                        Artwork(track, Modifier.size(46.dp), 11.dp, targetPx = 192)
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Text(track.title, fontSize = 13.sp, color = MistWhite,
@@ -647,6 +650,7 @@ private fun NowPlaying(
     onSwipeNext: () -> Unit,
     onSwipePrevious: () -> Unit,
 ) {
+    val tint = rememberArtworkTint(track)
     var draggedFraction by remember(track.id) { mutableStateOf<Float?>(null) }
     val sampledFraction = (if (duration > 0L) positionState.value.toFloat() / duration else 0f).coerceIn(0f, 1f)
     val smoothFraction by animateFloatAsState(
@@ -663,7 +667,7 @@ private fun NowPlaying(
             .coerceAtMost(maxWidth - 58.dp).coerceIn(162.dp, 356.dp)
         Artwork(track, Modifier.fillMaxWidth().height(maxHeight * 0.49f), corner = 0.dp, blurred = true)
         Box(Modifier.fillMaxSize().background(
-            Brush.verticalGradient(listOf(Color(0xAF0B1016), Color(0xE50B1016), LazyNight))
+            Brush.verticalGradient(listOf(tint.copy(alpha = 0.22f), Color(0xDC0B1016), LazyNight))
         ))
         Column(
             Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
