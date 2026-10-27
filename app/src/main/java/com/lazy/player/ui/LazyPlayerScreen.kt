@@ -603,7 +603,16 @@ private fun UnifiedDock(
                                 .clickable(onClick = onOpen),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Artwork(track, Modifier.size(45.dp), 12.dp, targetPx = 192)
+                            Box(Modifier.size(45.dp).clip(RoundedCornerShape(12.dp))) {
+                                Artwork(track, Modifier.fillMaxSize(), 12.dp, targetPx = 192)
+                                DockProgress(
+                                    positionState = positionState,
+                                    duration = duration,
+                                    playing = playing,
+                                    modifier = Modifier.align(Alignment.BottomCenter)
+                                        .padding(horizontal = 4.dp)
+                                )
+                            }
                             Spacer(Modifier.width(11.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(track.title, fontSize = 13.sp, color = MistWhite,
@@ -627,11 +636,6 @@ private fun UnifiedDock(
                                 modifier = Modifier.size(23.dp))
                         }
                     }
-                    DockProgress(
-                        positionState = positionState, duration = duration,
-                        playing = playing, modifier = Modifier.align(Alignment.BottomCenter)
-                            .padding(horizontal = 17.dp)
-                    )
                 }
             }
             DockTabs(grouping, onGroup, reduceMotion)
@@ -641,24 +645,28 @@ private fun UnifiedDock(
 
 @Composable
 private fun DockTabs(grouping: Grouping, onGroup: (Grouping) -> Unit, reduceMotion: Boolean) {
+    val largeFont = LocalDensity.current.fontScale >= 1.6f
     Row(
-        Modifier.fillMaxWidth().height(52.dp).padding(start = 12.dp, end = 10.dp),
+        Modifier.fillMaxWidth().height(52.dp)
+            .padding(start = if (largeFont) 8.dp else 12.dp, end = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(Modifier.width(if (LocalDensity.current.fontScale > 1.45f) 69.dp else 77.dp),
+        Row(Modifier.width(if (largeFont) 48.dp else 77.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.LibraryMusic, contentDescription = null, tint = SoftText,
-                modifier = Modifier.size(17.dp))
-            Spacer(Modifier.width(5.dp))
-            Text("Library", color = SoftText, fontSize = 11.sp,
-                fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Icon(Icons.Rounded.LibraryMusic,
+                contentDescription = if (largeFont) "Library" else null,
+                tint = SoftText, modifier = Modifier.size(if (largeFont) 21.dp else 17.dp))
+            if (!largeFont) {
+                Spacer(Modifier.width(5.dp))
+                Text("Library", color = SoftText, fontSize = 11.sp,
+                    fontFamily = FontFamily.SansSerif,
+                    fontWeight = FontWeight.Medium, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis)
+            }
         }
         BoxWithConstraints(Modifier.weight(1f).height(48.dp).testTag("dock-tabs")) {
             val segment = maxWidth / 3
             val target = segment * Grouping.entries.indexOf(grouping).coerceAtLeast(0)
-            // Placement is a render-layer translation, not remeasurement on each
-            // animation frame. animateDpAsState re-targets rapid taps automatically.
             val translation = animateDpAsState(
                 targetValue = target,
                 animationSpec = if (reduceMotion) snap()
@@ -669,14 +677,12 @@ private fun DockTabs(grouping: Grouping, onGroup: (Grouping) -> Unit, reduceMoti
             Box(Modifier.width(segment).height(47.dp).graphicsLayer {
                 translationX = translation.value.toPx()
             }, contentAlignment = Alignment.Center) {
-                Box(Modifier.fillMaxWidth(0.88f).height(35.dp)
+                Box(Modifier.fillMaxWidth(0.86f).height(35.dp)
                     .clip(RoundedCornerShape(13.dp))
-                    .background(
-                        Brush.verticalGradient(listOf(
-                            Color.White.copy(alpha = 0.115f),
-                            Color.White.copy(alpha = 0.045f)
-                        ))
-                    )
+                    .background(Brush.verticalGradient(listOf(
+                        Color.White.copy(alpha = 0.115f),
+                        Color.White.copy(alpha = 0.045f)
+                    )))
                     .border(0.5.dp, Color.White.copy(alpha = 0.10f),
                         RoundedCornerShape(13.dp)))
             }
@@ -686,11 +692,22 @@ private fun DockTabs(grouping: Grouping, onGroup: (Grouping) -> Unit, reduceMoti
                         .testTag("dock-tab-${tab.name.lowercase()}")
                         .clickable(onClick = { if (tab != grouping) onGroup(tab) }),
                         contentAlignment = Alignment.Center) {
-                        Text(tab.name, color = if (grouping == tab) MistWhite else SoftText,
-                            fontSize = 12.sp, fontFamily = FontFamily.SansSerif,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            fontWeight = if (grouping == tab)
-                                FontWeight.SemiBold else FontWeight.Medium)
+                        if (largeFont) {
+                            val icon = when (tab) {
+                                Grouping.Songs -> Icons.Rounded.MusicNote
+                                Grouping.Albums -> Icons.Rounded.Album
+                                Grouping.Artists -> Icons.Rounded.Person
+                            }
+                            Icon(icon, contentDescription = tab.name,
+                                tint = if (grouping == tab) MistWhite else SoftText,
+                                modifier = Modifier.size(22.dp))
+                        } else {
+                            Text(tab.name, color = if (grouping == tab) MistWhite else SoftText,
+                                fontSize = 12.sp, fontFamily = FontFamily.SansSerif,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                fontWeight = if (grouping == tab)
+                                    FontWeight.SemiBold else FontWeight.Medium)
+                        }
                     }
                 }
             }
