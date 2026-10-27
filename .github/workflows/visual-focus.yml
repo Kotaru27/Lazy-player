@@ -29,6 +29,10 @@ jobs:
         run: |
           sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
           gradle --no-daemon :app:assembleDebug
+      - name: Prepare FLAC fixture encoder on the cloud runner
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
       - name: Generate synthetic 35-second FLAC files
         run: |
           ffmpeg -hide_banner -loglevel error -f lavfi -i sine=frequency=440:duration=35 -c:a flac \
