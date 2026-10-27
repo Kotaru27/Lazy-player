@@ -923,13 +923,13 @@ private fun PlayerTimeline(
 @Composable
 private fun NowPlaying(
     track: AudioTrack,
-    previousArtworkTrack: AudioTrack?,
-    nextArtworkTrack: AudioTrack?,
     playing: Boolean,
     positionState: State<Long>,
     duration: Long,
     shuffle: Boolean,
     repeatMode: Int,
+    previousArtworkTrack: AudioTrack?,
+    nextArtworkTrack: AudioTrack?,
     expanded: Boolean,
     reduceMotion: Boolean,
     liked: Boolean,
