@@ -315,11 +315,12 @@ private fun CollectionHeading(name: String, count: Int, enabled: Boolean,
         Column(Modifier.weight(1f)) {
             Text(name, fontSize = 20.sp, color = MistWhite, fontWeight = FontWeight.SemiBold,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("$"+"{count} songs", color = SoftText, fontSize = 11.sp)
+            Text(count.toString() + if (count == 1) " song" else " songs", color = SoftText, fontSize = 11.sp)
         }
-        SmallAction(Icons.Rounded.PlayArrow, "Play all $"+"{count} songs", enabled, onPlay)
+        val countLabel = count.toString() + if (count == 1) " song" else " songs"
+        SmallAction(Icons.Rounded.PlayArrow, "Play all " + countLabel, enabled, onPlay)
         Spacer(Modifier.width(5.dp))
-        SmallAction(Icons.Rounded.Shuffle, "Shuffle all $"+"{count} songs", enabled, onShuffle)
+        SmallAction(Icons.Rounded.Shuffle, "Shuffle all " + countLabel, enabled, onShuffle)
     }
 }
 
