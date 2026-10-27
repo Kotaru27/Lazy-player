@@ -11,11 +11,28 @@ adb shell dumpsys gfxinfo com.lazy.player.preview reset >/dev/null 2>&1 || true
 # Record the actual emulator while Android instrumentation changes screens.
 adb shell screenrecord --time-limit 65 --bit-rate 1800000 /sdcard/lazy-preview-interaction.mp4 >/dev/null 2>&1 &
 record_pid=$!
+# Collect a diagnostic sample while the UI instrumentation is active. Previously
+# gfxinfo was requested only *after* instrumented Activities closed, yielding no
+# process and thus no performance evidence.
+(
+    for i in $(seq 1 22); do
+        if adb shell pidof com.lazy.player.preview >/dev/null 2>&1; then
+            {
+                printf '\\n=== Active emulator sample %s ===\\n' "$i"
+                adb shell dumpsys gfxinfo com.lazy.player.preview 2>/dev/null | head -n 38 || true
+            } >> evidence/normal/gfxinfo-active-samples.txt
+        fi
+        sleep 2
+    done
+) &
+metrics_pid=$!
 sleep 2
 set +e
 adb shell am instrument -w -r com.lazy.player.preview.test/androidx.test.runner.AndroidJUnitRunner | tee evidence/normal/instrumentation.txt
 first=${PIPESTATUS[0]}
 set -e
+kill "$metrics_pid" >/dev/null 2>&1 || true
+wait "$metrics_pid" >/dev/null 2>&1 || true
 for name in 01-library.png 02-now-playing.png 03-populated-library.png 04-albums.png; do
   adb exec-out run-as com.lazy.player.preview cat files/"$name" > evidence/normal/"$name" || true
 done
