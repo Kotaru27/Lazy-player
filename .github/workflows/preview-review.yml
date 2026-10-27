@@ -32,6 +32,15 @@ jobs:
           grep -F "versionName='0.5.0-preview'" /tmp/badging
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
           sha256sum app/build/outputs/apk/debug/app-debug.apk | tee /tmp/apk-sha256
+      - name: Stage Android SDK signing tool for private final signing
+        run: |
+          mkdir -p signing-tool
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" signing-tool/apksigner.jar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apksigner-sdk-tool
+          path: signing-tool/apksigner.jar
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: lazy-player-0.5-preview-apk
