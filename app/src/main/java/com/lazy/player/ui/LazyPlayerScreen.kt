@@ -39,6 +39,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.IntOffset
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -325,14 +327,15 @@ private fun CollectionHeading(name: String, count: Int, enabled: Boolean,
 private fun SmallAction(icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String, enabled: Boolean, onClick: () -> Unit) {
     val source = remember { MutableInteractionSource() }
-    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(48.dp),
+    IconButton(onClick = onClick, enabled = enabled,
+        modifier = Modifier.size(48.dp).semantics { contentDescription = title },
         interactionSource = source) {
         Box(Modifier.size(39.dp).clip(RoundedCornerShape(13.dp))
             .background(if (enabled) Color.White.copy(alpha = 0.075f) else Color.White.copy(alpha = 0.025f))
             .border(0.6.dp, Color.White.copy(alpha = if (enabled) 0.11f else 0.025f),
                 RoundedCornerShape(13.dp)),
             contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = title,
+            Icon(icon, contentDescription = null,
                 tint = if (enabled) MistWhite else SoftText.copy(alpha = 0.42f),
                 modifier = Modifier.size(20.dp))
         }
@@ -672,8 +675,15 @@ private fun NowPlaying(
         val compact = maxHeight < 740.dp
         val narrow = maxWidth < 375.dp
         val air = ((maxHeight - 755.dp) / 3f).coerceIn(0.dp, 38.dp)
-        val coverSize = (maxHeight * if (compact) 0.34f else 0.39f)
-            .coerceAtMost(maxWidth - 58.dp).coerceIn(162.dp, 356.dp)
+        // Reserve real vertical budget for 2-line titles, touch controls and Queue.
+        // On short/high-font displays the cover shrinks rather than pushing Queue offscreen.
+        val titleIsLong = track.title.length > 29
+        val coverSize = (maxHeight * when {
+            compact && titleIsLong -> 0.235f
+            compact -> 0.265f
+            titleIsLong -> 0.33f
+            else -> 0.38f
+        }).coerceAtMost(maxWidth - 58.dp).coerceIn(144.dp, 350.dp)
         Artwork(track, Modifier.fillMaxWidth().height(maxHeight * 0.49f), corner = 0.dp, blurred = true)
         Box(Modifier.fillMaxSize().background(
             Brush.verticalGradient(listOf(tint.copy(alpha = 0.22f), Color(0xDC0B1016), LazyNight))
@@ -791,8 +801,8 @@ private fun NowPlaying(
                         }, tint = if (repeatActive) accent else SoftText, modifier = Modifier.size(22.dp))
                 }
             }
-            Spacer(Modifier.height(if (compact) 6.dp else 12.dp))
-            Row(Modifier.fillMaxWidth().height(47.dp).clickable(onClick = onQueue),
+            Spacer(Modifier.height(if (compact) 3.dp else 12.dp))
+            Row(Modifier.fillMaxWidth().height(48.dp).clickable(onClick = onQueue),
                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.QueueMusic, null, tint = MistWhite, modifier = Modifier.size(19.dp))
                 Spacer(Modifier.width(9.dp))
