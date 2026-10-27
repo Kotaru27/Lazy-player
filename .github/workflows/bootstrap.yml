@@ -1,0 +1,49 @@
+name: Bootstrap Lazy Player source and build APK
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'bootstrap/source.tar.xz.b64'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify and unpack the original project
+        shell: bash
+        run: |
+          base64 --decode bootstrap/source.tar.xz.b64 > /tmp/lazy-player-source.tar.xz
+          echo "2d4b6d151aea9995e926935a2bff8d3c6063f3f19ab879472617c9749767d84d  /tmp/lazy-player-source.tar.xz" | sha256sum --check
+          tar -xJf /tmp/lazy-player-source.tar.xz -C .
+          rm bootstrap/source.tar.xz.b64
+          rmdir bootstrap
+      - name: Commit human-readable source code
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "Initialize Lazy Player Android source"
+          git push origin HEAD:main
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+      - name: Test and assemble the Android debug APK
+        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lazy-player-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
