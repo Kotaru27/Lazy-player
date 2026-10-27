@@ -1,0 +1,63 @@
+name: Publish Lazy Player Focus v0.4 preview
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-focus.yml'
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download passing CI build and verify APK identity and integrity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh run view 40467529280 -R "$GITHUB_REPOSITORY" --json conclusion --jq '.conclusion')" = "success"
+          mkdir -p dist
+          gh run download 40467529280 -R "$GITHUB_REPOSITORY" -n lazy-player-debug-apk -D dist
+          test -s dist/app-debug.apk
+          echo "fa73449fcb6df8fc1008942a31aedb7a7c67014a2a922f503b118059e074d220  dist/app-debug.apk" | sha256sum -c -
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/app-debug.apk > /tmp/badging.txt
+          grep -F "package: name='com.lazy.player.focus'" /tmp/badging.txt
+          grep -F "versionName='0.4.0-preview'" /tmp/badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose dist/app-debug.apk
+          mv dist/app-debug.apk dist/LazyPlayer-Focus-v0.4-debug.apk
+          (cd dist && sha256sum LazyPlayer-Focus-v0.4-debug.apk > SHA256SUMS.txt)
+      - name: Publish versioned side-by-side prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="v0.4.0-focus-preview.1"
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release already exists; refusing to overwrite assets"
+            exit 0
+          fi
+          cat > /tmp/notes.md <<'NOTES'
+          ## Lazy Player Focus 0.4 — Music-first redesign preview
+
+          **Android package:** `com.lazy.player.focus`. Can install alongside v0.1 (`com.lazy.player`), v0.2 (`com.lazy.player.next`) and v0.3 (`com.lazy.player.refined`).
+
+          - Library-level **Play all** and **Shuffle** on displayed Songs/Albums/Artists/Favourites/search results; shuffle begins at a random track and enables playlist shuffle.
+          - One integrated bottom dock for mini-player, thin playback-progress line and subdued navigation.
+          - Compact folder header with clear "Music" labels and **Use all music** inside a folder options menu.
+          - Cleaner now-playing balance, a single reachable queue action, a thin seek bar and more visible shuffle/repeat modes.
+          - Playing/paused icon and thin accent indicator instead of a large selected-song rectangle.
+          - Progress position updates isolated from parent UI; smooth displayed progress between 500ms position samples.
+
+          **Technical limits:** Glass is a selective frosted-artwork material; there is no verified real-time optical refraction or shared-artwork geometry transform. USB DAC presence detection does not guarantee bit-perfect or exclusive USB output. Performance and FLAC playback on physical hardware have not been measured.
+          **Preview warning:** Debug-signed APK. Installation and future upgrades may require managing independent debug signing keys. No production release approval.
+
+          **Verified:** [GitHub Actions 40467529280](https://github.com/Kotaru27/Lazy-player/actions/runs/40467529280) passed APK compilation and JVM unit tests at `1692e5a7f1ca4883ca0e7b40517841e71b7bcff7`.
+          **APK SHA-256:** `fa73449fcb6df8fc1008942a31aedb7a7c67014a2a922f503b118059e074d220`.
+          NOTES
+          gh release create "$tag" dist/LazyPlayer-Focus-v0.4-debug.apk dist/SHA256SUMS.txt \
+            -R "$GITHUB_REPOSITORY" --target 1692e5a7f1ca4883ca0e7b40517841e71b7bcff7 \
+            --title "Lazy Player Focus v0.4 — Music-first Preview" \
+            --notes-file /tmp/notes.md --prerelease --latest=false
+          gh release view "$tag" -R "$GITHUB_REPOSITORY" --json url,tagName,assets,isDraft,isPrerelease
