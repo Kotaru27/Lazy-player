@@ -11,8 +11,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -97,15 +101,35 @@ fun Artwork(
             .then(if (blurred) Modifier.blur(22.dp) else Modifier)
             .clip(RoundedCornerShape(corner))
             .background(Brush.linearGradient(
-                listOf(Color(0xFF3B525D), Color(0xFF263741), Color(0xFF121E27)))),
+                listOf(Color(0xFF292D34), Color(0xFF1D2229), Color(0xFF151A20)))),
         contentAlignment = Alignment.Center
     ) {
         if (bitmap != null) {
             Image(bitmap!!.asImageBitmap(), contentDescription = if (blurred) null else "Album artwork",
                 contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         } else if (!blurred) {
-            Icon(Icons.Rounded.GraphicEq, contentDescription = null,
-                tint = Color.White.copy(alpha = 0.60f), modifier = Modifier.fillMaxSize(0.30f))
+            val caption = track?.album?.takeUnless {
+                it.isBlank() || it.equals("Folder music", ignoreCase = true) ||
+                    it.equals("Unknown album", ignoreCase = true)
+            } ?: track?.artist?.takeUnless {
+                it.isBlank() || it.equals("Unknown artist", ignoreCase = true)
+            } ?: track?.title.orEmpty()
+            val initials = caption.trim().split(Regex("\\s+"))
+                .filter { it.isNotBlank() }.take(2)
+                .joinToString("") { it.take(1).uppercase() }.ifBlank { "LP" }
+            Column(Modifier.fillMaxSize().padding(6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center) {
+                Text(initials, color = Color(0xFFDEE2E6).copy(alpha = 0.84f),
+                    fontSize = if (targetPx <= 240) 17.sp else 44.sp,
+                    fontWeight = FontWeight.Medium, maxLines = 1)
+                if (targetPx > 240) {
+                    Spacer(Modifier.height(10.dp))
+                    Icon(Icons.Rounded.MusicNote, contentDescription = null,
+                        tint = Color(0xFFDEE2E6).copy(alpha = 0.36f),
+                        modifier = Modifier.size(17.dp))
+                }
+            }
         }
     }
 }
@@ -114,7 +138,7 @@ fun Artwork(
 @Composable
 fun rememberArtworkTint(track: AudioTrack?): Color {
     val context = LocalContext.current
-    val tint by produceState(initialValue = Color(0xFF354955), track?.id) {
+    val tint by produceState(initialValue = Color(0xFF343840), track?.id) {
         value = track?.let {
             withContext(Dispatchers.IO) {
                 val bmp = CoverCache.read(context, it, 192)
@@ -141,7 +165,7 @@ private fun mutedColor(bitmap: Bitmap): Color {
     val hsv = FloatArray(3)
     AndroidColor.RGBToHSV((r / samples).toInt(), (g / samples).toInt(), (b / samples).toInt(), hsv)
     if (hsv[2] < 0.1f) return Color(0xFF354955)
-    hsv[1] = hsv[1].coerceIn(0.10f, 0.36f)
-    hsv[2] = 0.38f
+    hsv[1] = hsv[1].coerceIn(0.08f, 0.28f)
+    hsv[2] = 0.34f
     return Color(AndroidColor.HSVToColor(hsv))
 }

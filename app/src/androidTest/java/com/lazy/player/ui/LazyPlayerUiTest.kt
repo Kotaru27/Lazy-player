@@ -42,7 +42,11 @@ class LazyPlayerUiTest {
             title = title,
             artist = artist,
             album = album,
-            albumId = if (album == "Album One") 42L else 43L,
+            albumId = when (album) {
+                "Album One" -> 42L
+                "Album Two" -> 43L
+                else -> 100L + ((id - 1000L).coerceAtLeast(0L) / 10L)
+            },
             durationMs = 35000L,
             dateAdded = 1L,
             filename = "$title.flac"
@@ -52,13 +56,14 @@ class LazyPlayerUiTest {
         active: AudioTrack? = songs[1],
         canNext: Boolean = true,
         canPrevious: Boolean = true,
-        folderName: String? = "FLAC Collection"
+        folderName: String? = "FLAC Collection",
+        collection: List<AudioTrack> = songs
     ) {
         rule.setContent {
             var liked by remember { mutableStateOf(setOf<Long>()) }
             val progress = remember { mutableLongStateOf(7000L) }
             LazyPlayerScreen(
-                tracks = songs,
+                tracks = collection,
                 hasPermission = true,
                 libraryLoading = false,
                 folderName = folderName,
@@ -90,7 +95,7 @@ class LazyPlayerUiTest {
                 onSeek = {},
                 onShuffle = {},
                 onRepeat = {},
-                queue = songs,
+                queue = collection,
                 onQueueSelection = {},
                 onToggleFavorite = { id ->
                     liked = if (id in liked) liked - id else liked + id
@@ -125,8 +130,10 @@ class LazyPlayerUiTest {
             assertTrue(shuffled)
         }
         rule.onNodeWithTag("dock-tab-songs").performClick()
-        rule.onAllNodesWithContentDescription("Add to favourites").onFirst().performClick()
-        rule.onNodeWithContentDescription("Show favourites").performClick()
+        rule.onNodeWithContentDescription("Options for Stage Light").performClick()
+        rule.onNodeWithText("Add to favourites").performClick()
+        rule.onNodeWithContentDescription("Choose All songs or Favourites").performClick()
+        rule.onNodeWithText("Favourites").performClick()
         rule.onNodeWithContentDescription("Play all 1 song").performClick()
         rule.runOnIdle { assertEquals(1, selected.size) }
     }
@@ -164,6 +171,26 @@ class LazyPlayerUiTest {
             assertEquals(2, nextSwipes)
             assertEquals(0, toggles)
         }
+    }
+
+    @Test fun hundredTrackLibraryKeepsDockAndAccessibleLastSong() {
+        val tracks = (0 until 120).map { i ->
+            audio(1000L + i, "Track " + i.toString().padStart(3, '0') +
+                if (i % 5 == 0) " తెలుగు సంగీతం" else "",
+                if (i % 2 == 0) "Artist One" else "Artist Two",
+                "Album " + (i / 10).toString())
+        }
+        show(active = tracks[0], collection = tracks)
+        rule.onNodeWithContentDescription("Play all 120 songs").assertExists()
+        rule.onNodeWithTag("dock-tabs").assertExists()
+        rule.onNodeWithTag("track-list").performScrollToNode(hasText("Track 119", substring = true))
+        rule.onNode(hasText("Track 119", substring = true)).assertExists()
+        save("03-populated-library")
+        rule.onNodeWithTag("dock-tab-albums").performClick()
+        rule.onNodeWithText("Album 0").assertExists()
+        save("04-albums")
+        rule.onNodeWithTag("dock-tab-artists").performClick()
+        rule.onNodeWithText("Artist One").assertExists()
     }
 
     @Test fun queueBoundariesIgnoreGestures() {
