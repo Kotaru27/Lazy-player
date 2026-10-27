@@ -162,13 +162,13 @@ fun Artwork(
  * shuffle the caller omits neighbors rather than guessing the queue order.
  */
 @Composable
-fun PrefetchSwipeArtwork(next: AudioTrack?, previous: AudioTrack?) {
+fun PrefetchSwipeArtwork(next: AudioTrack?, previous: AudioTrack?, targetPx: Int = 640) {
     val context = LocalContext.current
-    LaunchedEffect(next?.id, previous?.id) {
+    LaunchedEffect(next?.id, previous?.id, targetPx) {
         withContext(Dispatchers.IO) {
-            next?.let { CoverCache.read(context, it, 640) }
+            next?.let { CoverCache.read(context, it, targetPx) }
             if (previous?.id != next?.id) {
-                previous?.let { CoverCache.read(context, it, 640) }
+                previous?.let { CoverCache.read(context, it, targetPx) }
             }
         }
     }
