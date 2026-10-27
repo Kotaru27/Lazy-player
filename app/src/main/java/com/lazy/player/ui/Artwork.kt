@@ -177,37 +177,66 @@ fun PrefetchSwipeArtwork(next: AudioTrack?, previous: AudioTrack?) {
 @Composable
 private fun MissingCover(track: AudioTrack?, targetPx: Int, showCaption: Boolean) {
     val large = targetPx > 240
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    val albumName = track?.album?.takeUnless {
+        it.isBlank() || it.equals("Unknown album", ignoreCase = true)
+    } ?: track?.artist.orEmpty()
+    // Stable palette per album, not per-render random colors or hardcoded songs.
+    // Distinct missing covers prevent the library grid becoming a wall of discs.
+    val seed = (track?.albumId?.takeIf { it > 0L }
+        ?: albumName.hashCode().toLong()).and(Long.MAX_VALUE)
+    val palette = listOf(
+        Color(0xFF477179) to Color(0xFF162E37),
+        Color(0xFF856756) to Color(0xFF332725),
+        Color(0xFF536780) to Color(0xFF1E2838),
+        Color(0xFF73816A) to Color(0xFF263328),
+        Color(0xFF755F7B) to Color(0xFF2E2638),
+        Color(0xFF7E7963) to Color(0xFF333229)
+    )[(seed % 6L).toInt()]
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.linearGradient(listOf(palette.first, palette.second))
+        ), contentAlignment = Alignment.Center
+    ) {
         Canvas(Modifier.fillMaxSize()) {
-            val c = Offset(size.width * .51f, size.height * .48f)
             val unit = size.minDimension
+            val center = Offset(size.width * 0.78f, size.height * 0.24f)
             drawCircle(
-                brush = Brush.radialGradient(listOf(Color(0xFF424852), Color(0xFF1D252D)),
-                    center = c, radius = unit * .52f),
-                radius = unit * .43f, center = c
+                Brush.radialGradient(
+                    listOf(Color.White.copy(alpha = 0.19f), Color.Transparent),
+                    center = center, radius = unit * 0.92f
+                ), center = center, radius = unit * 0.92f
             )
-            for (i in 0..3) {
-                drawCircle(Color.White.copy(alpha = .035f),
-                    radius = unit * (.22f + .05f * i), center = c,
-                    style = Stroke(width = (if (large) 1.4.dp else .8.dp).toPx()))
+            // Off-axis architectural rings: no false spinning vinyl record.
+            for (index in 0..3) {
+                drawCircle(
+                    Color.White.copy(alpha = if (index == 0) 0.15f else 0.085f),
+                    center = Offset(size.width * 0.84f, size.height * 0.24f),
+                    radius = unit * (0.32f + index * 0.15f),
+                    style = Stroke(width = (if (large) 1.2.dp else 0.7.dp).toPx())
+                )
             }
-            drawCircle(Color(0xFFB9C2C7).copy(alpha = .24f),
-                radius = unit * .09f, center = c)
-            drawCircle(Color(0xFF20242B), radius = unit * .024f, center = c)
+            drawLine(
+                Color.White.copy(alpha = 0.14f),
+                Offset(size.width * 0.12f, size.height * 0.75f),
+                Offset(size.width * 0.92f, size.height * 0.22f),
+                strokeWidth = (if (large) 1.dp else 0.6.dp).toPx()
+            )
         }
         if (!large) {
             Icon(Icons.Rounded.MusicNote, contentDescription = null,
-                tint = Color.White.copy(alpha = .7f), modifier = Modifier.size(18.dp))
-        } else if (showCaption) {
-            val label = track?.album?.takeUnless {
-                it.isBlank() || it.equals("Unknown album", ignoreCase = true) ||
-                    it.equals("Folder music", ignoreCase = true)
-            } ?: track?.artist.orEmpty()
-            if (label.isNotBlank()) {
-                Text(label, Modifier.align(Alignment.BottomCenter)
-                    .padding(start = 21.dp, end = 21.dp, bottom = 20.dp),
+                tint = Color.White.copy(alpha = 0.80f), modifier = Modifier.size(19.dp))
+        } else {
+            Text(
+                albumName.firstOrNull()?.uppercaseChar()?.toString() ?: "♪",
+                modifier = Modifier.align(Alignment.Center),
+                fontSize = 88.sp, fontWeight = FontWeight.Light,
+                color = Color.White.copy(alpha = 0.81f)
+            )
+            if (showCaption && albumName.isNotBlank()) {
+                Text(albumName, Modifier.align(Alignment.BottomStart)
+                    .padding(start = 21.dp, end = 21.dp, bottom = 17.dp),
                     fontFamily = FontFamily.SansSerif,
-                    color = Color.White.copy(alpha = .72f), fontSize = 13.sp,
+                    color = Color.White.copy(alpha = 0.90f), fontSize = 13.sp,
                     fontWeight = FontWeight.Medium, maxLines = 1,
                     overflow = TextOverflow.Ellipsis)
             }
