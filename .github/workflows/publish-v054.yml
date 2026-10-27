@@ -1,0 +1,96 @@
+name: Publish signed Lazy Player v0.5.4 Identity and Motion
+on:
+  push:
+    branches: ['redesign/identity-motion-v054']
+    paths:
+      - '.github/workflows/publish-v054.yml'
+      - 'tools/reconstruct_signed_v054.py'
+      - 'release/v054_signed_delta.b64'
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Prepare SDK verification tools
+        run: sdkmanager 'build-tools;35.0.0'
+      - name: Require passing exact-source Android build and emulator audit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh run view 40494135511 -R "$GITHUB_REPOSITORY" --json conclusion --jq '.conclusion')" = success
+          gh run watch 40494135626 -R "$GITHUB_REPOSITORY" --exit-status --interval 10
+          test "$(gh run view 40494135626 -R "$GITHUB_REPOSITORY" --json conclusion --jq '.conclusion')" = success
+      - name: Download the exact tested CI APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh run download 40494135511 -R "$GITHUB_REPOSITORY" -n lazy-player-0.5.4-preview-apk -D dist
+          test -s dist/app-debug.apk
+          echo "bdc8cca5c377a715fd242d67b76572467e896ccba45dd411b21ebb9796b37d9c  dist/app-debug.apk" | sha256sum --check
+      - name: Recover exact privately signed update and verify certificate
+        run: |
+          set -euo pipefail
+          python3 tools/reconstruct_signed_v054.py dist/app-debug.apk release/v054_signed_delta.b64 dist/LazyPlayer-v0.5.4-Preview.apk
+          echo "2e293620114975cf5f39e6d51dc0a22b58f0dccda55e28b4dccd16072a82cb10  dist/LazyPlayer-v0.5.4-Preview.apk" | sha256sum --check
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/LazyPlayer-v0.5.4-Preview.apk | tee /tmp/appinfo
+          grep -F "package: name='com.lazy.player.preview'" /tmp/appinfo
+          grep -F "versionCode='5'" /tmp/appinfo
+          grep -F "versionName='0.5.4-preview'" /tmp/appinfo
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs dist/LazyPlayer-v0.5.4-Preview.apk | tee /tmp/certinfo
+          grep -F "8b329cb559e2ff4e39d3106cd8993af0463ceef7da8adf6fbaece6b4da0f58c4" /tmp/certinfo
+          (cd dist && sha256sum LazyPlayer-v0.5.4-Preview.apk > SHA256SUMS.txt)
+      - name: Publish verified v0.5.4 APK to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=v0.5.4-preview
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Existing signed release: refusing to overwrite'
+            exit 1
+          fi
+          cat >/tmp/notes.md <<'NOTES'
+          ## Lazy Player v0.5.4 — Identity and Motion Preview
+
+          Download **LazyPlayer-v0.5.4-Preview.apk** from Assets. This is an Android APK, not a web mockup.
+
+          **What's changed**
+          - Consistent app-controlled Android SansSerif typography with multilingual fallback.
+          - Correct Songs/Albums/Artists counts while Play all and Shuffle continue using the displayed song queue.
+          - A redesigned record-groove missing-cover treatment instead of giant initials, without redundant album-tile captions.
+          - Album-cover caching retains the previous image while loading a new one and crossfades when ready; decoding still runs off the main thread.
+          - Short, coordinated content-opacity transitions for library selection, a cover-only player expand/close movement, and a smooth dock reveal when the mini-player appears.
+          - Progress interpolation runs through each nominal 500ms position tick, avoiding the previous visible gap.
+          - Larger-text song rows support two title lines with inline duration. Search typing no longer retriggers the entire collection fade, and track changes no longer restart player zoom.
+
+          **Preserved:** offline local music, FLAC/Media3 playback, notification/background audio, folder picker and persistent permission, favourites, queue navigation, USB-C DAC detection.
+
+          **Installation:** Package `com.lazy.player.preview`, versionCode `5`, version `0.5.4-preview`. Signed with the same retained certificate as signed v0.5.1, v0.5.2 and v0.5.3; Android should install it as an update, not a new app. The original debug-signed v0.5.0 cannot update in place.
+
+          **Evidence:** [GitHub Android build + JVM tests](https://github.com/Kotaru27/Lazy-player/actions/runs/40494135511) and [emulator Compose UI suite](https://github.com/Kotaru27/Lazy-player/actions/runs/40494135626), including normal, 135%, and targeted 200% text checks. Emulator evidence is not real-device high-refresh performance certification.
+
+          **Remaining work:** genuine sampled-backdrop refraction, precise mini-to-full shared geometry, adjacent-cover swipe artwork and physical DAC/FLAC + optimized high-Hz frame profiling have not been verified or completed. Do not present the visual preview as proof of bit-perfect USB audio or 100Hz fluidity.
+
+          Tested source commit `d2cd29d0caa7f83a8a7d40ae9c7bf48eaad22009`.
+          APK SHA-256 `2e293620114975cf5f39e6d51dc0a22b58f0dccda55e28b4dccd16072a82cb10`.
+          Signing certificate SHA-256 `8b329cb559e2ff4e39d3106cd8993af0463ceef7da8adf6fbaece6b4da0f58c4`.
+
+          Changes remain on the `redesign/identity-motion-v054` branch; main was not merged.
+          NOTES
+          gh release create "$tag" \
+            dist/LazyPlayer-v0.5.4-Preview.apk dist/SHA256SUMS.txt \
+            -R "$GITHUB_REPOSITORY" --target d2cd29d0caa7f83a8a7d40ae9c7bf48eaad22009 \
+            --title "Lazy Player v0.5.4 — Identity and Motion" \
+            --notes-file /tmp/notes.md --latest
+          gh release view "$tag" -R "$GITHUB_REPOSITORY" --json url,tagName,assets,isDraft,isPrerelease
