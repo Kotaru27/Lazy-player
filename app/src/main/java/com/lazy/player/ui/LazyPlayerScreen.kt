@@ -550,6 +550,7 @@ private fun DockTabs(grouping: Grouping, onGroup: (Grouping) -> Unit, reduceMoti
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                 Grouping.entries.forEach { tab ->
                     Box(Modifier.weight(1f).fillMaxHeight()
+                        .testTag("dock-tab-${tab.name.lowercase()}")
                         .clickable(onClick = { onGroup(tab) }),
                         contentAlignment = Alignment.Center) {
                         Text(tab.name, color = if (grouping == tab) MistWhite else SoftText,

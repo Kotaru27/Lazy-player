@@ -117,14 +117,14 @@ class LazyPlayerUiTest {
             assertEquals(false, shuffled)
         }
         save("01-library")
-        rule.onNodeWithText("Albums").performClick()
+        rule.onNodeWithTag("dock-tab-albums").performClick()
         rule.onNodeWithText("Album One").performClick()
         rule.onNodeWithContentDescription("Shuffle all 2 songs").performClick()
         rule.runOnIdle {
             assertEquals(listOf(1L, 2L), selected)
             assertTrue(shuffled)
         }
-        rule.onNodeWithText("Songs").performClick()
+        rule.onNodeWithTag("dock-tab-songs").performClick()
         rule.onAllNodesWithContentDescription("Add to favourites").onFirst().performClick()
         rule.onNodeWithContentDescription("Show favourites").performClick()
         rule.onNodeWithContentDescription("Play all 1 songs").performClick()
