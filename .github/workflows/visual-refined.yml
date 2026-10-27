@@ -1,0 +1,65 @@
+name: Lazy Player Refined — visual screenshot QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/visual-refined.yml'
+      - 'tools/refined-smoke.sh'
+permissions:
+  contents: read
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable KVM for fast Android emulation
+        run: |
+          if [ -e /dev/kvm ]; then
+            sudo chmod 666 /dev/kvm
+            ls -l /dev/kvm
+          else
+            echo "KVM device unavailable; Android emulator may be slow"
+          fi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Compile test candidate
+        run: |
+          sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+          gradle --no-daemon :app:assembleDebug
+      - name: Generate synthetic track
+        run: |
+          python3 - <<'PY'
+          import os, math, wave, array
+          path=os.path.join(os.environ["RUNNER_TEMP"],"Stage_Light.wav")
+          sample_rate=11025
+          samples=array.array("h", (int(7000*math.sin(2*math.pi*440*i/sample_rate)) for i in range(10*sample_rate)))
+          with wave.open(path,"wb") as f:
+              f.setnchannels(1); f.setsampwidth(2); f.setframerate(sample_rate); f.writeframes(samples.tobytes())
+          PY
+      - name: Install and capture running UI
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          sdcard-path-or-size: 512M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: bash tools/refined-smoke.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lazy-player-refined-visual-evidence
+          path: screenshots/
+          if-no-files-found: warn
