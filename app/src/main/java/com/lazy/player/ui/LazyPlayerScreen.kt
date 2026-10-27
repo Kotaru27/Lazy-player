@@ -531,9 +531,22 @@ private fun SoftIcon(image: androidx.compose.ui.graphics.vector.ImageVector, lab
 @Composable
 private fun AlbumTile(title: String, tracks: List<AudioTrack>, onClick: () -> Unit) {
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Artwork(tracks.firstOrNull(), Modifier.fillMaxWidth().aspectRatio(1f), 13.dp,
-            targetPx = 640, showPlaceholderCaption = false)
-        Spacer(Modifier.height(10.dp))
+        val albumShape = RoundedCornerShape(19.dp)
+        Box(Modifier.fillMaxWidth().aspectRatio(1f)
+            .clip(albumShape)
+            .background(Color(0xFF222F37))) {
+            Artwork(tracks.firstOrNull(), Modifier.fillMaxSize(), 19.dp,
+                targetPx = 640, showPlaceholderCaption = false)
+            Box(Modifier.align(Alignment.BottomEnd).padding(10.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xC018222B))
+                .border(0.5.dp, Color.White.copy(alpha = 0.19f), RoundedCornerShape(10.dp))
+                .padding(horizontal = 9.dp, vertical = 6.dp)) {
+                Text(tracks.size.toString() + if (tracks.size == 1) " track" else " tracks",
+                    color = MistWhite, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+        Spacer(Modifier.height(11.dp))
         Text(title, color = MistWhite, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
             maxLines = 2, minLines = 1, overflow = TextOverflow.Ellipsis, lineHeight = 19.sp)
         Spacer(Modifier.height(3.dp))
@@ -568,7 +581,9 @@ private fun TrackRow(track: AudioTrack, selected: Boolean, playing: Boolean,
     var menu by remember(track.id) { mutableStateOf(false) }
     val largeText = LocalDensity.current.fontScale >= 1.55f
     Row(Modifier.fillMaxWidth().heightIn(min = if (largeText) 100.dp else 70.dp)
-        .clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick)
+        .clip(RoundedCornerShape(14.dp))
+        .background(if (selected) Color(0x293F535F) else Color.Transparent)
+        .clickable(onClick = onClick)
         .padding(start = 4.dp, end = 2.dp, top = 7.dp, bottom = 7.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.width(3.dp).height(27.dp).clip(CircleShape)
