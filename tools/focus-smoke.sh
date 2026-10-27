@@ -17,6 +17,12 @@ adb push "$RUNNER_TEMP/Stage_Light.flac" /sdcard/Music/QA_Collection/Stage_Light
 adb push "$RUNNER_TEMP/Second_Track.flac" /sdcard/Music/QA_Collection/Second_Track.flac
 adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Music/QA_Collection/Stage_Light.flac || true
 adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Music/QA_Collection/Second_Track.flac || true
+# Some headless emulator media scanners add entries but leave audio metadata NULL.
+# Force metadata on *synthetic QA entries only* so the ordinary MediaStore query can be tested.
+for name in Stage_Light Second_Track; do
+  adb shell content update --uri content://media/external/audio/media \
+    --where "title='$name'" --bind is_music:i:1 --bind duration:l:35000 || true
+done
 adb shell pm grant com.lazy.player.focus android.permission.READ_MEDIA_AUDIO
 adb shell am force-stop com.lazy.player.focus
 adb shell am start -n com.lazy.player.focus/com.lazy.player.MainActivity
