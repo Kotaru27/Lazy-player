@@ -617,8 +617,7 @@ private fun UnifiedDock(
                 animationSpec = if (reduceMotion) snap() else spring(
                     dampingRatio = Spring.DampingRatioNoBouncy,
                     stiffness = Spring.StiffnessMediumLow
-                ),
-                label = "mini-player-dock-height"
+                )
             )
             .shadow(8.dp, shape, clip = false)
             .clip(shape)
