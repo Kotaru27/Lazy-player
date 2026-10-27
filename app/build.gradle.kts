@@ -9,11 +9,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.lazy.player.next"
+        applicationId = "com.lazy.player.refined"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "0.2.0-preview"
+        versionName = "0.3.0-preview"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

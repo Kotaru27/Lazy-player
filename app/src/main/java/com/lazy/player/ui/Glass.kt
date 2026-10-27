@@ -25,30 +25,24 @@ val Lavender = Color(0xFFDDECF4)
  */
 fun Modifier.glass(radius: Int = 26, bright: Boolean = false): Modifier {
     val shape = RoundedCornerShape(radius.dp)
-    return this.clip(shape)
-        .background(
-            Brush.linearGradient(
-                listOf(
-                    Color(0xFF69879A).copy(alpha = if (bright) 0.44f else 0.24f),
-                    Color(0xFF243541).copy(alpha = if (bright) 0.87f else 0.73f),
-                    Color(0xFF111C25).copy(alpha = 0.92f)
-                )
-            )
-        )
+    // Only mini-player and bottom navigation should use this strong layer.
+    // Blur/refraction is deliberately not faked by stacking opaque gradients.
+    return this
+        .clip(shape)
+        .background(Color(0xFF809CAA).copy(alpha = if (bright) 0.21f else 0.14f))
         .background(
             Brush.verticalGradient(
-                0f to Color.White.copy(alpha = if (bright) 0.19f else 0.12f),
-                0.22f to Color.White.copy(alpha = 0.045f),
-                0.7f to Color.Transparent,
-                1f to Color.Black.copy(alpha = 0.24f)
+                0f to Color.White.copy(alpha = if (bright) 0.10f else 0.06f),
+                0.36f to Color.White.copy(alpha = 0.02f),
+                1f to Color.Black.copy(alpha = 0.07f)
             )
         )
         .border(
-            1.dp,
+            0.7.dp,
             Brush.verticalGradient(
-                0f to Color.White.copy(alpha = if (bright) 0.63f else 0.41f),
-                0.35f to Color.White.copy(alpha = 0.14f),
-                1f to Color.White.copy(alpha = 0.07f)
+                0f to Color.White.copy(alpha = if (bright) 0.33f else 0.24f),
+                0.42f to Color.White.copy(alpha = 0.10f),
+                1f to Color.White.copy(alpha = 0.045f)
             ),
             shape
         )
