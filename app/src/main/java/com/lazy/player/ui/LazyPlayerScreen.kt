@@ -3,12 +3,15 @@ package com.lazy.player.ui
 import androidx.activity.compose.BackHandler
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
@@ -652,32 +655,40 @@ private fun UnifiedDock(
                         Modifier.fillMaxSize().padding(start = 9.dp, end = 3.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
+                        Box(
                             Modifier.weight(1f).fillMaxHeight().testTag("mini-swipe-zone")
                                 .trackSwipe(track.id, canNext, canPrevious, onSwipeNext, onSwipePrevious)
                                 .clickable(onClick = onOpen),
-                            verticalAlignment = Alignment.CenterVertically
+                            contentAlignment = Alignment.CenterStart
                         ) {
-                            Box(Modifier.size(45.dp).clip(RoundedCornerShape(12.dp))) {
-                                Artwork(track, Modifier.fillMaxSize(), 12.dp, targetPx = 192)
-                                DockProgress(
-                                    positionState = positionState,
-                                    duration = duration,
-                                    playing = playing,
-                                    modifier = Modifier.align(Alignment.BottomCenter)
-                                        .padding(horizontal = 4.dp)
-                                )
-                            }
-                            Spacer(Modifier.width(11.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(track.title, fontSize = 13.sp, color = MistWhite,
-                                    fontFamily = FontFamily.SansSerif,
-                                    fontWeight = FontWeight.SemiBold, maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis)
-                                Spacer(Modifier.height(4.dp))
-                                Text(track.artist, color = SoftText, fontSize = 11.sp,
-                                    fontFamily = FontFamily.SansSerif, maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis)
+                            Crossfade(
+                                targetState = track,
+                                animationSpec = tween(if (reduceMotion) 0 else 175),
+                                label = "mini-track-content"
+                            ) { displayed ->
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Box(Modifier.size(45.dp).clip(RoundedCornerShape(12.dp))) {
+                                        Artwork(displayed, Modifier.fillMaxSize(), 12.dp, targetPx = 192)
+                                        if (displayed.id == track.id) DockProgress(
+                                            positionState = positionState,
+                                            duration = duration,
+                                            playing = playing,
+                                            modifier = Modifier.align(Alignment.BottomCenter)
+                                                .padding(horizontal = 4.dp)
+                                        )
+                                    }
+                                    Spacer(Modifier.width(11.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(displayed.title, fontSize = 13.sp, color = MistWhite,
+                                            fontFamily = FontFamily.SansSerif,
+                                            fontWeight = FontWeight.SemiBold, maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis)
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(displayed.artist, color = SoftText, fontSize = 11.sp,
+                                            fontFamily = FontFamily.SansSerif, maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis)
+                                    }
+                                }
                             }
                         }
                         IconButton(onClick = onPlay, modifier = Modifier.size(48.dp)) {
@@ -863,6 +874,142 @@ private fun Modifier.trackSwipe(
         }
 }
 
+
+/**
+ * A true two-sided cover deck. The next/previous cover follows the finger
+ * instead of waiting for Media3 to switch tracks before appearing.
+ * On commit we settle the deck first, request the queue change once, then
+ * reset only if the controller fails to report a new track.
+ *
+ * The queue neighbours are visual hints only: in shuffle mode they are null,
+ * and the placeholder never assumes which song Media3 will select.
+ */
+@Composable
+private fun SwipeArtworkCarousel(
+    track: AudioTrack,
+    previous: AudioTrack?,
+    next: AudioTrack?,
+    coverSize: androidx.compose.ui.unit.Dp,
+    reduceMotion: Boolean,
+    canNext: Boolean,
+    canPrevious: Boolean,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit
+) {
+    val density = LocalDensity.current
+    val travel = with(density) { (coverSize + 12.dp).toPx() }
+    val threshold = with(density) { 68.dp.toPx() }
+    var displacement by remember(track.id) { mutableFloatStateOf(0f) }
+    var settling by remember(track.id) { mutableStateOf(false) }
+    var motionJob by remember(track.id) { mutableStateOf<Job?>(null) }
+    val scope = rememberCoroutineScope()
+    val latestNext = rememberUpdatedState(onNext)
+    val latestPrevious = rememberUpdatedState(onPrevious)
+
+    fun returnHome() {
+        motionJob?.cancel()
+        motionJob = scope.launch {
+            if (reduceMotion) {
+                displacement = 0f
+            } else {
+                Animatable(displacement).animateTo(
+                    0f,
+                    spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    )
+                ) { displacement = value }
+            }
+        }
+    }
+
+    Box(
+        Modifier.size(coverSize)
+            .shadow(11.dp, RoundedCornerShape(21.dp))
+            .clip(RoundedCornerShape(21.dp))
+            .testTag("now-artwork-swipe-zone")
+            .pointerInput(track.id, canNext, canPrevious, reduceMotion, travel) {
+                var drag = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = {
+                        if (!settling) {
+                            motionJob?.cancel()
+                            drag = 0f
+                        }
+                    },
+                    onHorizontalDrag = { change, amount ->
+                        if (!settling) {
+                            drag += amount
+                            val resisted = when {
+                                drag < 0f && !canNext -> drag * 0.13f
+                                drag > 0f && !canPrevious -> drag * 0.13f
+                                else -> drag
+                            }
+                            displacement = resisted.coerceIn(-travel, travel)
+                            change.consume()
+                        }
+                    },
+                    onDragEnd = {
+                        if (!settling) {
+                            val action = TrackSwipe.decide(
+                                drag, 0f, threshold, canNext, canPrevious
+                            )
+                            if (action == SwipeTrackAction.NONE) returnHome()
+                            else {
+                                settling = true
+                                motionJob?.cancel()
+                                motionJob = scope.launch {
+                                    val target = if (action == SwipeTrackAction.NEXT) -travel else travel
+                                    if (!reduceMotion) {
+                                        Animatable(displacement).animateTo(
+                                            target,
+                                            tween(175, easing = FastOutSlowInEasing)
+                                        ) { displacement = value }
+                                    }
+                                    // Exactly one playback request per completed swipe.
+                                    if (action == SwipeTrackAction.NEXT) latestNext.value()
+                                    else latestPrevious.value()
+                                    // Track-id key resets the deck as soon as Media3 confirms
+                                    // the change. Timeout recovers a failed/no-op seek.
+                                    delay(550)
+                                    displacement = 0f
+                                    settling = false
+                                }
+                            }
+                        }
+                    },
+                    onDragCancel = { if (!settling) returnHome() }
+                )
+            }
+    ) {
+        if (canPrevious) {
+            Box(Modifier.fillMaxSize().graphicsLayer {
+                translationX = displacement - travel
+            }) {
+                if (previous != null) Artwork(previous, Modifier.fillMaxSize(), 21.dp)
+                else Box(Modifier.fillMaxSize().background(Color(0xFF252D36)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Shuffle, "Previous shuffled track", tint = SoftText)
+                }
+            }
+        }
+        if (canNext) {
+            Box(Modifier.fillMaxSize().graphicsLayer {
+                translationX = displacement + travel
+            }) {
+                if (next != null) Artwork(next, Modifier.fillMaxSize(), 21.dp)
+                else Box(Modifier.fillMaxSize().background(Color(0xFF252D36)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Shuffle, "Next shuffled track", tint = SoftText)
+                }
+            }
+        }
+        // Current cover is composited last only while stationary, otherwise its
+        // translated layer leaves room for the incoming neighbour cover.
+        Artwork(track, Modifier.fillMaxSize().graphicsLayer {
+            translationX = displacement
+        }, 21.dp)
+    }
+}
+
 private fun albumKey(track: AudioTrack): String = if (track.albumId > 0) "album:${track.albumId}" else "${track.album}|${track.artist}"
 
 private fun durationString(ms: Long): String {
@@ -949,7 +1096,11 @@ private fun NowPlaying(
     onSwipePrevious: () -> Unit,
 ) {
     PrefetchSwipeArtwork(nextArtworkTrack, previousArtworkTrack)
-    val tint = rememberArtworkTint(track)
+    val tint by animateColorAsState(
+        targetValue = rememberArtworkTint(track),
+        animationSpec = tween(if (reduceMotion) 0 else 240),
+        label = "artwork-ambient-tint"
+    )
     // Expand once on opening the player; changing tracks should crossfade
     // album art rather than repeatedly zoom the whole cover in and out.
     var coverEntered by remember { mutableStateOf(false) }
@@ -969,28 +1120,20 @@ private fun NowPlaying(
             .coerceAtLeast(142.dp).coerceAtMost(maxWidth - 54.dp).coerceAtMost(350.dp)
         val remaining = (maxHeight - reserve - coverSize).coerceAtLeast(0.dp)
         val air = (remaining / 3f).coerceAtMost(30.dp)
-        // The art layer dissolves to transparency before its bottom edge.
-        // Offscreen compositing keeps the fade from becoming a rectangular seam.
-        Artwork(track,
-            Modifier.fillMaxWidth().height(maxHeight * 0.65f)
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                .drawWithContent {
-                    drawContent()
-                    drawRect(
-                        Brush.verticalGradient(
-                            0f to Color.Black,
-                            0.54f to Color.Black,
-                            1f to Color.Transparent
-                        ),
-                        blendMode = BlendMode.DstIn
-                    )
-                },
-            corner = 0.dp, blurred = true)
+        // A precomposed colour wash follows the album tint. Full-size blurred
+        // album bitmaps previously required offscreen GPU compositing on every
+        // track change; gradients need no bitmap blur or blend-mask layer.
         Box(Modifier.fillMaxSize().background(
             Brush.verticalGradient(
-                0f to tint.copy(alpha = 0.13f),
-                0.55f to LazyNight.copy(alpha = 0.46f),
+                0f to tint.copy(alpha = 0.29f),
+                0.48f to Color(0xFF131920).copy(alpha = 0.80f),
                 1f to LazyNight
+            )
+        ))
+        Box(Modifier.fillMaxWidth().height(maxHeight * 0.59f).background(
+            Brush.radialGradient(
+                colors = listOf(tint.copy(alpha = 0.24f), tint.copy(alpha = 0.055f), Color.Transparent),
+                radius = with(LocalDensity.current) { maxWidth.toPx() * 0.82f }
             )
         ))
         Column(
@@ -1007,28 +1150,41 @@ private fun NowPlaying(
             }
             Spacer(Modifier.height(if (compact) 8.dp else 17.dp).heightIn(min = air))
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Artwork(track,
-                    Modifier.size(coverSize).testTag("now-artwork-swipe-zone")
-                        .graphicsLayer {
-                            scaleX = artScale
-                            scaleY = artScale
-                        }
-                        .trackSwipe(track.id, canNext, canPrevious,
-                            onSwipeNext, onSwipePrevious)
-                        .shadow(9.dp, RoundedCornerShape(18.dp)),
-                    18.dp)
+                Box(Modifier.graphicsLayer {
+                    scaleX = artScale
+                    scaleY = artScale
+                }) {
+                    SwipeArtworkCarousel(
+                        track = track,
+                        previous = previousArtworkTrack,
+                        next = nextArtworkTrack,
+                        coverSize = coverSize,
+                        reduceMotion = reduceMotion,
+                        canNext = canNext,
+                        canPrevious = canPrevious,
+                        onNext = onSwipeNext,
+                        onPrevious = onSwipePrevious
+                    )
+                }
             }
             Spacer(Modifier.height((if (compact) 16.dp else 23.dp) + air))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(track.title, color = MistWhite,
-                        fontSize = if (compact) 23.sp else 27.sp,
-                        lineHeight = if (compact) 28.sp else 33.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(5.dp))
-                    Text(track.artist, color = SoftText, fontSize = 15.sp,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Crossfade(
+                    targetState = track,
+                    animationSpec = tween(if (reduceMotion) 0 else 190),
+                    modifier = Modifier.weight(1f),
+                    label = "now-track-metadata"
+                ) { displayed ->
+                    Column {
+                        Text(displayed.title, color = MistWhite,
+                            fontSize = if (compact) 23.sp else 27.sp,
+                            lineHeight = if (compact) 28.sp else 33.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(5.dp))
+                        Text(displayed.artist, color = SoftText, fontSize = 15.sp,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
                 IconButton(onClick = onFavorite, modifier = Modifier.size(48.dp)) {
                     Icon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
