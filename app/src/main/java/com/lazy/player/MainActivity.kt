@@ -5,6 +5,9 @@ import android.content.ComponentName
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.net.Uri
+import android.content.Intent
+import android.provider.DocumentsContract
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -22,6 +25,8 @@ import androidx.media3.session.SessionToken
 import com.lazy.player.data.AudioTrack
 import com.lazy.player.data.Favorites
 import com.lazy.player.data.MusicLibrary
+import com.lazy.player.data.FolderLibrary
+import com.lazy.player.data.rememberUsbDacConnected
 import com.lazy.player.ui.LazyPlayerScreen
 import kotlinx.coroutines.delay
 
@@ -62,6 +67,24 @@ private fun LazyPlayerApplication() {
     val permission = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
     var granted by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }
+    val preferences = remember(context) { context.getSharedPreferences("music_library_source", 0) }
+    var folderUri by remember {
+        mutableStateOf(preferences.getString("folder_uri", null)?.let { Uri.parse(it) })
+    }
+    var folderError by remember { mutableStateOf<String?>(null) }
+    val chooseFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                preferences.edit().putString("folder_uri", uri.toString()).apply()
+                folderUri = uri
+                folderError = null
+            } catch (_: SecurityException) {
+                folderError = "Couldn't keep access to this folder. Please select it again."
+            }
+        }
+    }
+    val dacConnected = rememberUsbDacConnected()
     var tracks by remember { mutableStateOf<List<AudioTrack>>(emptyList()) }
     var libraryLoading by remember { mutableStateOf(granted) }
     var refreshTick by remember { mutableIntStateOf(0) }
@@ -70,14 +93,31 @@ private fun LazyPlayerApplication() {
     var queueRevision by remember { mutableIntStateOf(0) }
     var favorites by remember { mutableStateOf(Favorites(context).ids()) }
 
-    LaunchedEffect(granted, refreshTick) {
-        if (!granted) {
+    LaunchedEffect(granted, refreshTick, folderUri) {
+        // A selected SAF folder needs no whole-library audio permission.
+        if (folderUri == null && !granted) {
             tracks = emptyList()
             libraryLoading = false
         } else {
-            if (tracks.isEmpty()) libraryLoading = true
-            try { tracks = MusicLibrary.read(context) }
-            finally { libraryLoading = false }
+            libraryLoading = true
+            try {
+                if (folderUri != null) {
+                    val uri = folderUri!!
+                    val stored = context.contentResolver.persistedUriPermissions
+                        .any { it.uri == uri && it.isReadPermission }
+                    if (!stored) {
+                        tracks = emptyList()
+                        folderError = "Access to the selected folder was lost. Choose it again."
+                    } else {
+                        val scan = FolderLibrary.read(context, uri)
+                        tracks = scan.tracks
+                        folderError = scan.error
+                    }
+                } else {
+                    tracks = MusicLibrary.read(context)
+                    folderError = null
+                }
+            } finally { libraryLoading = false }
         }
     }
     DisposableEffect(lifecycleOwner, granted) {
@@ -139,8 +179,20 @@ private fun LazyPlayerApplication() {
     }
     LazyPlayerScreen(
         tracks = tracks,
-        hasPermission = granted,
+        hasPermission = granted || folderUri != null,
         libraryLoading = libraryLoading,
+        folderName = folderUri?.let { uri ->
+            runCatching { DocumentsContract.getTreeDocumentId(uri).substringAfterLast('/').ifBlank { "Selected folder" } }
+                .getOrDefault("Selected folder")
+        },
+        folderError = folderError,
+        usbDacConnected = dacConnected,
+        onChooseFolder = { chooseFolder.launch(folderUri) },
+        onUseAllMusic = {
+            folderUri = null
+            preferences.edit().remove("folder_uri").apply()
+            folderError = null
+        },
         onPermission = { permissionLauncher.launch(permission) },
         currentTrack = currentTrack,
         playing = state.playing,
