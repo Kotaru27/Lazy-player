@@ -55,7 +55,7 @@ private object CoverCache {
                 retriever.setDataSource(context, track.uri)
                 retriever.embeddedPicture
             } finally { retriever.release() }
-            if (raw.isNullOrEmpty()) null else {
+            if (raw == null || raw.isEmpty()) null else {
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 BitmapFactory.decodeByteArray(raw, 0, raw.size, bounds)
                 if (bounds.outWidth <= 0 || bounds.outHeight <= 0) null else {
