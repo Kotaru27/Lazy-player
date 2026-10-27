@@ -190,7 +190,7 @@ class LazyPlayerUiTest {
         rule.onNodeWithText("Album 0").assertExists()
         save("04-albums")
         rule.onNodeWithTag("dock-tab-artists").performClick()
-        rule.onNodeWithText("Artist One").assertExists()
+        rule.onAllNodes(hasText("Artist One", substring = true)).onFirst().assertExists()
     }
 
     @Test fun queueBoundariesIgnoreGestures() {

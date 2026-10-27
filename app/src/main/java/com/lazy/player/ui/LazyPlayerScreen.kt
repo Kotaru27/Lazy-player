@@ -377,9 +377,10 @@ private fun CollectionHeading(
             Text(count.toString() + if (count == 1) " song" else " songs",
                 fontSize = 12.sp, color = SoftText)
         }
-        SmallAction(Icons.Rounded.PlayArrow, "Play all $count songs", enabled, onPlay)
+        val plural = count.toString() + if (count == 1) " song" else " songs"
+        SmallAction(Icons.Rounded.PlayArrow, "Play all " + plural, enabled, onPlay)
         Spacer(Modifier.width(4.dp))
-        SmallAction(Icons.Rounded.Shuffle, "Shuffle all $count songs", enabled, onShuffle)
+        SmallAction(Icons.Rounded.Shuffle, "Shuffle all " + plural, enabled, onShuffle)
     }
 }
 
