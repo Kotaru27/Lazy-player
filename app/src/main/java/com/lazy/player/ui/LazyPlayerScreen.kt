@@ -41,6 +41,7 @@ import kotlin.math.roundToLong
 private enum class Page { Listen, Liked }
 private enum class Grouping { Songs, Albums, Artists }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LazyPlayerScreen(
     tracks: List<AudioTrack>,
