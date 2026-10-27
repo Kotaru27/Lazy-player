@@ -187,9 +187,11 @@ class LazyPlayerUiTest {
         rule.onNode(hasText("Track 119", substring = true)).assertExists()
         save("03-populated-library")
         rule.onNodeWithTag("dock-tab-albums").performClick()
+        rule.onNodeWithText("12 albums").assertExists()
         rule.onNodeWithText("Album 0").assertExists()
         save("04-albums")
         rule.onNodeWithTag("dock-tab-artists").performClick()
+        rule.onNodeWithText("2 artists").assertExists()
         rule.onAllNodes(hasText("Artist One", substring = true)).onFirst().assertExists()
     }
 

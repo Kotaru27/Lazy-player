@@ -129,7 +129,19 @@ fun LazyPlayerScreen(
         result.filter { TrackFilters.matches(it.title, it.artist, it.album, query) }
     }
 
+    val contentTransition = remember { Animatable(1f) }
+    LaunchedEffect(grouping, page, selectedGroup, query, reduceMotion) {
+        if (reduceMotion) contentTransition.snapTo(1f)
+        else {
+            contentTransition.snapTo(0.82f)
+            contentTransition.animateTo(1f, tween(170, easing = FastOutSlowInEasing))
+        }
+    }
+
     MaterialTheme(colorScheme = darkColorScheme(primary = Lavender, onSurface = MistWhite, surface = LazyNight)) {
+        // One app-owned type system: device display-font substitutions do not affect
+        // metadata and navigation, while Android still provides script fallbacks.
+        ProvideTextStyle(value = TextStyle(fontFamily = FontFamily.SansSerif)) {
         Box(Modifier.fillMaxSize().background(LazyNight)) {
             AmbientHaze()
             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
@@ -185,6 +197,17 @@ fun LazyPlayerScreen(
                             else -> grouping.name
                         },
                         count = filtered.size,
+                        collectionCaption = when {
+                            selectedGroup != null || page == Page.Liked || grouping == Grouping.Songs -> null
+                            grouping == Grouping.Albums -> {
+                                val count = filtered.map { albumKey(it) }.distinct().size
+                                count.toString() + if (count == 1) " album" else " albums"
+                            }
+                            else -> {
+                                val count = filtered.map { it.artist }.distinct().size
+                                count.toString() + if (count == 1) " artist" else " artists"
+                            }
+                        },
                         allowFavouriteFilter = selectedGroup == null && grouping == Grouping.Songs,
                         showingFavourites = page == Page.Liked,
                         onChangeFavourites = { show ->
@@ -196,6 +219,9 @@ fun LazyPlayerScreen(
                         onShuffle = { onPlayCollection(filtered, true) }
                     )
                     Spacer(Modifier.height(6.dp))
+                    Box(Modifier.fillMaxSize().graphicsLayer {
+                        alpha = contentTransition.value
+                    }) {
                     when {
                         !hasPermission -> IntroState(onPermission, onChooseFolder)
                         libraryLoading && tracks.isEmpty() -> LoadingLibrary()
@@ -245,6 +271,7 @@ fun LazyPlayerScreen(
                             }
                         }
                     }
+                    }
                 }
                 UnifiedDock(
                     track = currentTrack, playing = playing,
@@ -273,6 +300,7 @@ fun LazyPlayerScreen(
                 currentTrack?.let { track ->
                     NowPlaying(
                         track, playing, positionState, duration, shuffle, repeatMode,
+                        expanded = fullPlayer, reduceMotion = reduceMotion,
                         liked = track.id in favorites,
                         onDismiss = { fullPlayer = false }, onPlay = onTogglePlay, onNext = onNext, onPrevious = onPrevious,
                         onSeek = onSeek, onShuffle = onShuffle, onRepeat = onRepeat, onFavorite = { onToggleFavorite(track.id) },
@@ -300,6 +328,7 @@ fun LazyPlayerScreen(
                     }
                 }
             }
+        }
         }
     }
 }
@@ -346,7 +375,7 @@ private fun FolderMenu(folderName: String?, onChooseFolder: () -> Unit, onUseAll
 
 @Composable
 private fun CollectionHeading(
-    name: String, count: Int, allowFavouriteFilter: Boolean,
+    name: String, count: Int, collectionCaption: String?, allowFavouriteFilter: Boolean,
     showingFavourites: Boolean, onChangeFavourites: (Boolean) -> Unit,
     enabled: Boolean, onPlay: () -> Unit, onShuffle: () -> Unit
 ) {
@@ -379,7 +408,7 @@ private fun CollectionHeading(
                 Text(name, fontSize = 24.sp, color = MistWhite, fontWeight = FontWeight.SemiBold,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Text(count.toString() + if (count == 1) " song" else " songs",
+            Text(collectionCaption ?: (count.toString() + if (count == 1) " song" else " songs"),
                 fontSize = 12.sp, color = SoftText)
         }
         val plural = count.toString() + if (count == 1) " song" else " songs"
@@ -725,7 +754,7 @@ private fun DockProgress(
     val current = if (duration > 0L) positionState.value.toFloat() / duration else 0f
     val animated = animateFloatAsState(
         targetValue = current.coerceIn(0f, 1f),
-        animationSpec = tween(if (playing && !reduced) 440 else 0, easing = LinearEasing),
+        animationSpec = tween(if (playing && !reduced) 525 else 0, easing = LinearEasing),
         label = "mini-track-progress"
     )
     Box(modifier.fillMaxWidth().height(1.5.dp).drawBehind {
@@ -832,7 +861,7 @@ private fun PlayerTimeline(
         (positionState.value.toFloat() / duration).coerceIn(0f, 1f) else 0f
     val animated = animateFloatAsState(
         targetValue = sample,
-        animationSpec = tween(if (playing && !reduced) 440 else 0, easing = LinearEasing),
+        animationSpec = tween(if (playing && !reduced) 525 else 0, easing = LinearEasing),
         label = "isolated-seek-progress"
     )
     val fraction = (draggedFraction ?: animated.value).coerceIn(0f, 1f)
@@ -873,6 +902,8 @@ private fun NowPlaying(
     duration: Long,
     shuffle: Boolean,
     repeatMode: Int,
+    expanded: Boolean,
+    reduceMotion: Boolean,
     liked: Boolean,
     onDismiss: () -> Unit,
     onPlay: () -> Unit,
@@ -890,6 +921,13 @@ private fun NowPlaying(
     onSwipePrevious: () -> Unit,
 ) {
     val tint = rememberArtworkTint(track)
+    var coverEntered by remember(track.id) { mutableStateOf(false) }
+    LaunchedEffect(track.id) { coverEntered = true }
+    val artScale by animateFloatAsState(
+        targetValue = if (expanded && coverEntered) 1f else 0.90f,
+        animationSpec = tween(if (reduceMotion) 0 else 225, easing = FastOutSlowInEasing),
+        label = "player-artwork-expand"
+    )
     BoxWithConstraints(Modifier.fillMaxSize().background(LazyNight)) {
         val fontScale = LocalDensity.current.fontScale
         val compact = maxHeight < 750.dp || fontScale > 1.35f
@@ -940,6 +978,10 @@ private fun NowPlaying(
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Artwork(track,
                     Modifier.size(coverSize).testTag("now-artwork-swipe-zone")
+                        .graphicsLayer {
+                            scaleX = artScale
+                            scaleY = artScale
+                        }
                         .trackSwipe(track.id, canNext, canPrevious,
                             onSwipeNext, onSwipePrevious)
                         .shadow(9.dp, RoundedCornerShape(18.dp)),
