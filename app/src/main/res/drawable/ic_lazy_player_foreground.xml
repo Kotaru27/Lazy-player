@@ -1,0 +1,27 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Original Lazy Player ribbon-play identity; safe adaptive-icon zone. -->
+    <path android:fillColor="#0D252E" android:fillAlpha="0.63"
+        android:pathData="M34,24 C38,21 43,22 47,25 L80,46 C88,51 88,58 81,63 L46,84 C40,88 33,85 33,78 L33,33 C33,29 33,27 34,24 Z"/>
+    <path android:fillColor="#48C3BA"
+        android:pathData="M29,30 C29,23 36,20 42,24 L77,47 C85,52 85,59 77,64 L42,86 C36,90 29,86 29,79 Z"/>
+    <path android:fillColor="#83DFD5" android:fillAlpha="0.92"
+        android:pathData="M30,29 C34,24 39,23 44,27 L76,48 C79,50 81,52 81,54 C68,48 54,40 38,36 C34,35 31,33 30,29 Z"/>
+    <path android:fillColor="#2D8F95" android:fillAlpha="0.88"
+        android:pathData="M30,77 C34,83 40,84 45,80 L76,60 C79,58 81,55 81,53 C82,58 80,61 76,64 L42,85 C36,89 30,86 30,79 Z"/>
+    <path android:fillColor="#103743"
+        android:pathData="M43,41 L64,54 L43,68 Z"/>
+    <path android:strokeColor="#F0FFFB" android:strokeAlpha="0.89"
+        android:strokeWidth="2.5" android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M35,33 L35,75"/>
+    <path android:strokeColor="#E4FFFF" android:strokeAlpha="0.70"
+        android:strokeWidth="1.4" android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M40,29 C51,33 63,41 75,49"/>
+    <path android:strokeColor="#C8F9ED" android:strokeAlpha="0.31"
+        android:strokeWidth="1.25" android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M31,29 C31,24 36,23 42,26 L77,49 C82,52 82,59 77,62 L42,84 C36,87 31,83 31,79 Z"/>
+</vector>
