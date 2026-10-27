@@ -1,0 +1,91 @@
+name: Publish signed Lazy Player v0.5.3 Motion Preview
+on:
+  push:
+    branches: ['redesign/dock-motion-v053']
+    paths:
+      - '.github/workflows/publish-v053.yml'
+      - 'tools/reconstruct_signed_v053.py'
+      - 'release/v053_signed_delta.b64'
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Set up Android package verifier
+        run: sdkmanager 'build-tools;35.0.0'
+      - name: Require exact build and emulator UI evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh run view 40488610445 -R "$GITHUB_REPOSITORY" --json conclusion --jq '.conclusion')" = success
+          gh run watch 40488610383 -R "$GITHUB_REPOSITORY" --exit-status --interval 10
+          test "$(gh run view 40488610383 -R "$GITHUB_REPOSITORY" --json conclusion --jq '.conclusion')" = success
+      - name: Get tested Android CI APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh run download 40488610445 -R "$GITHUB_REPOSITORY" -n lazy-player-0.5.3-preview-apk -D dist
+          test -s dist/app-debug.apk
+          echo "4867713b7e900b3676528af99b8b90e76b2ea42660282e05f36ccc7c44c8d330  dist/app-debug.apk" | sha256sum --check
+      - name: Verify exact owner-signed package, metadata and identity
+        run: |
+          set -euo pipefail
+          python3 tools/reconstruct_signed_v053.py dist/app-debug.apk release/v053_signed_delta.b64 dist/LazyPlayer-v0.5.3-Motion-Preview.apk
+          echo "bd0ecbdd0d2c844b1d59d3a4b1a70da88d0d75358c9de62ddd22dc64f06eb560  dist/LazyPlayer-v0.5.3-Motion-Preview.apk" | sha256sum --check
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/LazyPlayer-v0.5.3-Motion-Preview.apk | tee /tmp/appinfo
+          grep -F "package: name='com.lazy.player.preview'" /tmp/appinfo
+          grep -F "versionCode='4'" /tmp/appinfo
+          grep -F "versionName='0.5.3-preview'" /tmp/appinfo
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs dist/LazyPlayer-v0.5.3-Motion-Preview.apk | tee /tmp/certinfo
+          grep -F "8b329cb559e2ff4e39d3106cd8993af0463ceef7da8adf6fbaece6b4da0f58c4" /tmp/certinfo
+          (cd dist && sha256sum LazyPlayer-v0.5.3-Motion-Preview.apk > SHA256SUMS.txt)
+      - name: Publish v0.5.3 after all checks pass
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=v0.5.3-preview
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Existing release; refusing to overwrite immutable signed asset'
+            exit 1
+          fi
+          cat >/tmp/notes.md <<'NOTES'
+          ## Lazy Player v0.5.3 — Fluid Dock and Playback Motion Preview
+
+          **Android APK:** Download `LazyPlayer-v0.5.3-Motion-Preview.apk` under Assets.
+
+          This preview directly addresses the oversized mini-player / tab dock screenshot. Changes:
+          - One compact charcoal/opal dock without a thick horizontal divider; smaller moving glass selector and legible app-owned sans-serif mini-player labels.
+          - Track progress embedded on the album thumbnail instead of separating the dock.
+          - At 160%+ font scale, navigation uses accessible icons rather than truncated text.
+          - Selector spring movement uses GPU graphics-layer translation, not repeated layout passes.
+          - Horizontal swipes now update one graphics-layer offset without spawning coroutines for each pointer event. Cancellation snaps back; queue boundaries and paused state continue to be respected.
+          - Now Playing seek progress is isolated from the full-screen composition, and opening/closing no longer scales the entire artwork background.
+          - Unchanged: FLAC/Media3 playback engine, USB-C DAC detection, folder selection, favourites and offline library.
+
+          **Upgrade compatibility:** package `com.lazy.player.preview`, versionCode `4`, versionName `0.5.3-preview`. Owner signing certificate matches signed v0.5.1/v0.5.2, so Android should update them in place without creating a second app. An old debug-key-signed v0.5.0 preview remains incompatible.
+
+          **Cloud verification:** [Android build + JVM tests](https://github.com/Kotaru27/Lazy-player/actions/runs/40488610445), [Android emulator UI tests with normal/135%/200% text](https://github.com/Kotaru27/Lazy-player/actions/runs/40488610383). Physical-device FLAC/IEM/DAC, measured release-mode FPS/jank and genuine live optical glass remain unverified. This is a tested preview, not a 100Hz performance guarantee.
+
+          Tested source: `57329de24359ad08c7b8237c70d8aac2d6e62591`.
+          Signed APK SHA-256: `bd0ecbdd0d2c844b1d59d3a4b1a70da88d0d75358c9de62ddd22dc64f06eb560`.
+          Certificate SHA-256: `8b329cb559e2ff4e39d3106cd8993af0463ceef7da8adf6fbaece6b4da0f58c4`.
+          Source remains on `redesign/dock-motion-v053`, not merged into main.
+          NOTES
+          gh release create "$tag" \
+            dist/LazyPlayer-v0.5.3-Motion-Preview.apk dist/SHA256SUMS.txt \
+            -R "$GITHUB_REPOSITORY" --target 57329de24359ad08c7b8237c70d8aac2d6e62591 \
+            --title "Lazy Player v0.5.3 — Fluid Dock and Motion" \
+            --notes-file /tmp/notes.md --latest
+          gh release view "$tag" -R "$GITHUB_REPOSITORY" --json url,tagName,assets,isDraft,isPrerelease
