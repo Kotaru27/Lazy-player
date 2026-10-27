@@ -49,14 +49,13 @@ internal fun TrackMotionSurface(
         if (!settling) shown = track
     }
     DisposableEffect(Unit) { onDispose { job?.cancel() } }
-    BoxWithConstraints(modifier) {
+    BoxWithConstraints(modifier.testTag(tag)) {
         val widthPx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
         val threshold = with(LocalDensity.current) { 62.dp.toPx() }
         val incoming = if (settling) latched
             else if (displacement < 0f) next else previous
         val towardsNext = if (settling) toNext else displacement < 0f
         Box(Modifier.fillMaxSize().clip(RoundedCornerShape(18.dp))
-            .testTag(tag)
             .pointerInput(track.id, canNext, canPrevious, widthPx, reduceMotion) {
                 var delta = 0f
                 detectHorizontalDragGestures(
