@@ -514,7 +514,8 @@ private fun SoftIcon(image: androidx.compose.ui.graphics.vector.ImageVector, lab
 @Composable
 private fun AlbumTile(title: String, tracks: List<AudioTrack>, onClick: () -> Unit) {
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Artwork(tracks.firstOrNull(), Modifier.fillMaxWidth().aspectRatio(1f), 13.dp, targetPx = 640)
+        Artwork(tracks.firstOrNull(), Modifier.fillMaxWidth().aspectRatio(1f), 13.dp,
+            targetPx = 640, showPlaceholderCaption = false)
         Spacer(Modifier.height(10.dp))
         Text(title, color = MistWhite, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
             maxLines = 2, minLines = 1, overflow = TextOverflow.Ellipsis, lineHeight = 19.sp)
@@ -548,7 +549,8 @@ private fun TrackRow(track: AudioTrack, selected: Boolean, playing: Boolean,
     liked: Boolean, onFavorite: () -> Unit, onClick: () -> Unit
 ) {
     var menu by remember(track.id) { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().heightIn(min = 70.dp)
+    val largeText = LocalDensity.current.fontScale >= 1.55f
+    Row(Modifier.fillMaxWidth().heightIn(min = if (largeText) 100.dp else 70.dp)
         .clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick)
         .padding(start = 4.dp, end = 2.dp, top = 7.dp, bottom = 7.dp),
         verticalAlignment = Alignment.CenterVertically) {
@@ -558,18 +560,24 @@ private fun TrackRow(track: AudioTrack, selected: Boolean, playing: Boolean,
         Artwork(track, Modifier.size(50.dp), 11.dp, targetPx = 192)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(track.title, color = MistWhite, fontSize = 15.sp,
+            Text(track.title, color = MistWhite,
+                fontSize = if (largeText) 14.sp else 15.sp,
+                lineHeight = if (largeText) 19.sp else 19.sp,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                maxLines = if (largeText) 2 else 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(5.dp))
-            Text(track.artist, color = SoftText, fontSize = 12.sp,
+            Text(if (largeText) track.artist + " · " + durationString(track.durationMs)
+                else track.artist, color = SoftText,
+                fontSize = if (largeText) 11.sp else 12.sp,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (selected) {
             Icon(if (playing) Icons.Rounded.GraphicEq else Icons.Rounded.PauseCircleOutline,
                 if (playing) "Track playing" else "Track paused",
                 tint = MistWhite, modifier = Modifier.size(19.dp))
-        } else Text(durationString(track.durationMs), color = SoftText, fontSize = 11.sp)
+        } else if (!largeText) {
+            Text(durationString(track.durationMs), color = SoftText, fontSize = 11.sp)
+        }
         Box {
             IconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Rounded.MoreVert, "Options for " + track.title,

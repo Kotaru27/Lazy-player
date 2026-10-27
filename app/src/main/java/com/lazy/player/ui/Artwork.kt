@@ -103,7 +103,8 @@ fun Artwork(
     modifier: Modifier = Modifier,
     corner: Dp = 18.dp,
     blurred: Boolean = false,
-    targetPx: Int = 640
+    targetPx: Int = 640,
+    showPlaceholderCaption: Boolean = true
 ) {
     val context = LocalContext.current
     val outcome by produceState<CoverResult>(
@@ -137,14 +138,14 @@ fun Artwork(
                     contentDescription = if (blurred) null else "Album artwork",
                     contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             } else if (!blurred) {
-                MissingCover(track, targetPx)
+                MissingCover(track, targetPx, showPlaceholderCaption)
             }
         }
     }
 }
 
 @Composable
-private fun MissingCover(track: AudioTrack?, targetPx: Int) {
+private fun MissingCover(track: AudioTrack?, targetPx: Int, showCaption: Boolean) {
     val large = targetPx > 240
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
@@ -167,7 +168,7 @@ private fun MissingCover(track: AudioTrack?, targetPx: Int) {
         if (!large) {
             Icon(Icons.Rounded.MusicNote, contentDescription = null,
                 tint = Color.White.copy(alpha = .7f), modifier = Modifier.size(18.dp))
-        } else {
+        } else if (showCaption) {
             val label = track?.album?.takeUnless {
                 it.isBlank() || it.equals("Unknown album", ignoreCase = true) ||
                     it.equals("Folder music", ignoreCase = true)
