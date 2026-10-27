@@ -1,0 +1,1 @@
+Initialize Lazy Player native source and build debug APK.
