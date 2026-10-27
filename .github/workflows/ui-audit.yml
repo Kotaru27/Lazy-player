@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/ui-audit.yml'
+      - 'tools/ui_smoke.sh'
   workflow_dispatch:
 
 permissions:
@@ -24,11 +25,11 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
-      - name: Install Android platform and compile app
+      - name: Compile Android APK
         run: |
           sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
           gradle --no-daemon :app:assembleDebug
-      - name: Prepare synthetic test audio
+      - name: Generate synthetic music fixture
         run: |
           python3 - <<'PY'
           import array, math, wave, os
@@ -39,79 +40,19 @@ jobs:
               audio.setsampwidth(2)
               audio.setframerate(11025)
               audio.writeframes(samples.tobytes())
-          print("Generated safe synthetic test fixture:", path)
+          print(path)
           PY
-      - name: Screenshot smoke test in Android emulator
+      - name: Android emulator screenshots and smoke checks
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 34
           arch: x86_64
+          target: google_apis
           profile: pixel_5
+          sdcard-path-or-size: 512M
+          ram-size: 2048M
           disable-animations: true
-          script: |
-            set -e
-            mkdir -p screenshots
-            adb shell mkdir -p /sdcard/Music
-            adb push "$RUNNER_TEMP/Stage_Light.wav" /sdcard/Music/Stage_Light.wav
-            adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Music/Stage_Light.wav || true
-            adb install -r app/build/outputs/apk/debug/app-debug.apk
-            adb shell pm grant com.lazy.player android.permission.READ_MEDIA_AUDIO
-            adb shell am start -n com.lazy.player/.MainActivity
-            sleep 10
-            adb exec-out screencap -p > screenshots/01-library.png
-            adb shell uiautomator dump /sdcard/window.xml >/dev/null
-            adb pull /sdcard/window.xml screenshots/library.xml >/dev/null
-            TAP=$(python3 - <<'PY'
-            import xml.etree.ElementTree as ET, re
-            root=ET.parse('screenshots/library.xml').getroot()
-            nodes=[n for n in root.iter() if 'Stage Light' in n.attrib.get('text','')]
-            if not nodes:
-                raise SystemExit('TEST FAILURE: synthetic audio was not indexed and displayed in library')
-            n=nodes[-1]
-            b=list(map(int,re.findall(r'\d+',n.attrib['bounds'])))
-            print((b[0]+b[2])//2,(b[1]+b[3])//2)
-            PY
-            )
-            adb shell input tap $TAP
-            sleep 3
-            adb exec-out screencap -p > screenshots/02-mini-player.png
-            adb shell uiautomator dump /sdcard/window.xml >/dev/null
-            adb pull /sdcard/window.xml screenshots/mini.xml >/dev/null
-            TAP=$(python3 - <<'PY'
-            import xml.etree.ElementTree as ET, re
-            root=ET.parse('screenshots/mini.xml').getroot()
-            nodes=[n for n in root.iter() if 'Stage Light' in n.attrib.get('text','')]
-            if not nodes: raise SystemExit('TEST FAILURE: mini player has no track title')
-            n=max(nodes,key=lambda n:int(re.findall(r'\d+',n.attrib.get('bounds','[0,0][0,0]'))[1]))
-            b=list(map(int,re.findall(r'\d+',n.attrib['bounds'])))
-            print((b[0]+b[2])//2,(b[1]+b[3])//2)
-            PY
-            )
-            adb shell input tap $TAP
-            sleep 3
-            adb exec-out screencap -p > screenshots/03-now-playing.png
-            adb shell uiautomator dump /sdcard/window.xml >/dev/null
-            adb pull /sdcard/window.xml screenshots/now-playing.xml >/dev/null
-            grep -q 'NOW PLAYING' screenshots/now-playing.xml || (echo 'TEST FAILURE: Now Playing not rendered' && exit 1)
-            TAP=$(python3 - <<'PY'
-            import xml.etree.ElementTree as ET, re
-            root=ET.parse('screenshots/now-playing.xml').getroot()
-            nodes=[n for n in root.iter() if 'Open playback queue' in n.attrib.get('content-desc','')]
-            if not nodes: raise SystemExit('TEST FAILURE: queue button inaccessible')
-            b=list(map(int,re.findall(r'\d+',nodes[-1].attrib['bounds'])))
-            print((b[0]+b[2])//2,(b[1]+b[3])//2)
-            PY
-            )
-            adb shell input tap $TAP
-            sleep 2
-            adb exec-out screencap -p > screenshots/04-queue.png
-            adb shell settings put system font_scale 1.3
-            adb shell wm size 720x1280
-            adb shell wm density 320
-            adb shell am force-stop com.lazy.player
-            adb shell am start -n com.lazy.player/.MainActivity
-            sleep 4
-            adb exec-out screencap -p > screenshots/05-small-large-text.png
+          script: bash tools/ui_smoke.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
