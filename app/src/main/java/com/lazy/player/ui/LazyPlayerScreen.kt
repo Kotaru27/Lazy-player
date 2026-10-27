@@ -645,6 +645,8 @@ private fun UnifiedDock(
         animationSpec = tween(if (reduceMotion) 0 else 220),
         label = "mini-ambient-tint"
     )
+    // Warm compact neighbour covers off the UI thread for finger-following swipes.
+    if (track != null) PrefetchSwipeArtwork(next, previous, targetPx = 192)
     // Two genuinely floating surfaces: one focused playback island, one
     // separate collection dock. No dummy divider or opaque monolithic toolbar.
     Column(
