@@ -129,7 +129,7 @@ class LazyPlayerUiTest {
     @Test fun libraryActionsRespectAlbumAndSearchAndFavourites() {
         show()
         rule.onNodeWithText("lazy player").assertExists()
-        rule.onNodeWithText("Library").assertExists()
+        rule.onNodeWithTag("dock-tab-songs").assertExists()
         rule.onNodeWithTag("dock-tabs").assertExists()
         rule.onNodeWithContentDescription("Play all 3 songs").performClick()
         rule.runOnIdle {
@@ -280,6 +280,15 @@ class LazyPlayerUiTest {
             assertEquals(0, previousSwipes)
             assertEquals(0, nextSwipes)
         }
+    }
+
+    @Test fun quietPrecisionFormatAndQueueAreHonest() {
+        show()
+        rule.onNodeWithTag("mini-swipe-zone").performClick()
+        rule.onNodeWithText("FILENAME FORMAT · .FLAC").assertExists()
+        rule.onNodeWithText("USB DAC detected · output not verified").assertExists()
+        rule.onNodeWithContentDescription("Open queue").performClick()
+        rule.onNodeWithText("Up next").assertExists()
     }
 
     @Test fun queueBoundariesIgnoreGestures() {
