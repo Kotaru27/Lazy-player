@@ -721,8 +721,8 @@ private fun UnifiedDock(
     ) {
         if (track != null) {
             Box(Modifier.fillMaxWidth().height(when {
-                fontScale >= 1.85f -> 112.dp
-                expandedType -> 92.dp
+                fontScale >= 1.85f -> 140.dp
+                expandedType -> 100.dp
                 else -> 72.dp
             })) {
                 Row(
