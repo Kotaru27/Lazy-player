@@ -473,60 +473,91 @@ private fun SmallAction(icon: androidx.compose.ui.graphics.vector.ImageVector,
 
 @Composable
 private fun IntroState(onPermission: () -> Unit, onChooseFolder: () -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 26.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Icon(Icons.Rounded.LibraryMusic, null, Modifier.size(62.dp), tint = Lavender)
+    Column(Modifier.fillMaxSize().padding(horizontal = 28.dp),
+        horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.Center) {
+        Icon(Icons.Rounded.LibraryMusic, null, tint = MistWhite, modifier = Modifier.size(42.dp))
         Spacer(Modifier.height(28.dp))
-        Text("Make room for music.", color = MistWhite, fontSize = 25.sp, fontWeight = FontWeight.Light)
-        Spacer(Modifier.height(10.dp))
-        Text("Select a music folder or grant access to your complete on-device library. Nothing gets uploaded.", color = SoftText, fontSize = 14.sp, lineHeight = 21.sp, modifier = Modifier.padding(horizontal = 24.dp))
-        Spacer(Modifier.height(29.dp))
-        Box(Modifier.clip(CircleShape).background(MistWhite).clickable(onClick = onPermission).padding(horizontal = 26.dp, vertical = 16.dp)) {
-            Text("All songs on this phone", color = LazyNight, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text("Your music.\\nOnly yours.", color = MistWhite, fontSize = 31.sp,
+            lineHeight = 38.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(14.dp))
+        Text("Listen to audio saved on this phone. No account, upload or streaming needed.",
+            color = SoftText, fontSize = 15.sp, lineHeight = 23.sp)
+        Spacer(Modifier.height(28.dp))
+        Box(Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(15.dp))
+            .background(MistWhite).clickable(onClick = onPermission)
+            .padding(horizontal = 18.dp), contentAlignment = Alignment.CenterStart) {
+            Text("Allow device music", color = LazyNight, fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold)
         }
-        Spacer(Modifier.height(12.dp))
-        Box(Modifier.glass(24, bright = true).clickable(onClick = onChooseFolder).padding(horizontal = 24.dp, vertical = 15.dp)) {
-            Text("Choose my FLAC folder", color = MistWhite, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(10.dp))
+        Box(Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(15.dp))
+            .background(Color.White.copy(alpha = 0.075f)).clickable(onClick = onChooseFolder)
+            .padding(horizontal = 18.dp), contentAlignment = Alignment.CenterStart) {
+            Text("Choose a music folder", color = MistWhite, fontSize = 15.sp)
         }
     }
 }
 
 @Composable
 private fun LoadingLibrary() {
-    Column(Modifier.fillMaxWidth().fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        CircularProgressIndicator(modifier = Modifier.size(27.dp), color = Lavender, strokeWidth = 2.dp)
+    Column(Modifier.fillMaxSize().padding(28.dp),
+        verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        CircularProgressIndicator(modifier = Modifier.size(28.dp),
+            color = MistWhite, strokeWidth = 2.dp)
         Spacer(Modifier.height(18.dp))
-        Text("Finding your music…", color = SoftText, fontSize = 14.sp)
+        Text("Reading your music", color = MistWhite, fontSize = 17.sp,
+            fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(5.dp))
+        Text("Building your local library", color = SoftText, fontSize = 13.sp)
     }
 }
 
 @Composable
 private fun FolderError(message: String, onChooseFolder: () -> Unit) {
-    Column(Modifier.fillMaxWidth().fillMaxHeight().padding(30.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Icon(Icons.Rounded.FolderOff, null, tint = Lavender, modifier = Modifier.size(42.dp))
-        Spacer(Modifier.height(15.dp))
+    Column(Modifier.fillMaxSize().padding(horizontal = 28.dp),
+        verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.Start) {
+        Icon(Icons.Rounded.FolderOff, null, tint = SoftText, modifier = Modifier.size(36.dp))
+        Spacer(Modifier.height(20.dp))
+        Text("Can't read this folder", color = MistWhite, fontSize = 22.sp,
+            fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(9.dp))
         Text(message, color = SoftText, fontSize = 14.sp, lineHeight = 21.sp)
-        Spacer(Modifier.height(18.dp))
-        Box(Modifier.glass(24).clickable(onClick = onChooseFolder).padding(16.dp)) {
-            Text("Choose music folder", color = MistWhite, fontSize = 14.sp)
+        Spacer(Modifier.height(23.dp))
+        Box(Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp))
+            .background(MistWhite).clickable(onClick = onChooseFolder)
+            .padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+            Text("Choose another folder", color = LazyNight, fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold)
         }
     }
 }
 
 @Composable
 private fun EmptyLibrary(onRefresh: () -> Unit, folderName: String?, onChooseFolder: () -> Unit) {
-    Column(Modifier.fillMaxWidth().fillMaxHeight().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Icon(Icons.Rounded.MusicOff, null, tint = Lavender, modifier = Modifier.size(46.dp))
+    Column(Modifier.fillMaxSize().padding(horizontal = 28.dp),
+        verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.Start) {
+        Icon(Icons.Rounded.MusicOff, null, tint = SoftText, modifier = Modifier.size(36.dp))
         Spacer(Modifier.height(20.dp))
-        Text("Nothing here yet", color = MistWhite, fontSize = 22.sp, fontWeight = FontWeight.Light)
+        Text("No music found", color = MistWhite, fontSize = 22.sp,
+            fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
-        Text(if (folderName != null) "No supported audio files in this folder. Try a different folder." else "Add music to your phone or select a folder.", color = SoftText, fontSize = 13.sp, lineHeight = 20.sp)
-        Spacer(Modifier.height(24.dp))
-        Box(Modifier.glass(24).clickable(onClick = onRefresh).padding(horizontal = 24.dp, vertical = 13.dp)) {
-            Text("Refresh", color = MistWhite, fontSize = 13.sp)
-        }
-        Spacer(Modifier.height(10.dp))
-        Box(Modifier.clickable(onClick = onChooseFolder).padding(14.dp)) {
-            Text("Choose another folder", color = Lavender, fontSize = 13.sp)
+        Text(if (folderName != null) "This folder contains no supported audio files."
+            else "Add audio files to your phone or choose a music folder.",
+            color = SoftText, fontSize = 14.sp, lineHeight = 21.sp)
+        Spacer(Modifier.height(23.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp))
+                .background(MistWhite).clickable(onClick = onChooseFolder)
+                .padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+                Text("Choose folder", color = LazyNight, fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold)
+            }
+            Box(Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp))
+                .background(Color.White.copy(alpha = 0.075f)).clickable(onClick = onRefresh)
+                .padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+                Text("Refresh", color = MistWhite, fontSize = 14.sp)
+            }
         }
     }
 }
