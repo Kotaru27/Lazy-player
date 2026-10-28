@@ -50,25 +50,5 @@ fun Modifier.glass(radius: Int = 26, bright: Boolean = false): Modifier {
 
 @Composable
 fun AmbientHaze(modifier: Modifier = Modifier) {
-    Canvas(modifier.fillMaxSize()) {
-        drawRect(LazyNight)
-        drawCircle(
-            brush = Brush.radialGradient(
-                listOf(Color(0xFF363B46).copy(alpha = 0.20f), Color.Transparent),
-                center = Offset(size.width * 0.91f, size.height * 0.12f),
-                radius = size.width * 0.85f
-            ),
-            center = Offset(size.width * 0.91f, size.height * 0.12f),
-            radius = size.width * 0.85f
-        )
-        drawCircle(
-            brush = Brush.radialGradient(
-                listOf(Color(0xFF2D333C).copy(alpha = 0.15f), Color.Transparent),
-                center = Offset(size.width * 0.03f, size.height * 0.94f),
-                radius = size.width * 0.90f
-            ),
-            center = Offset(size.width * 0.03f, size.height * 0.94f),
-            radius = size.width * 0.90f
-        )
-    }
+    Canvas(modifier.fillMaxSize()) { drawRect(LazyNight) }
 }
