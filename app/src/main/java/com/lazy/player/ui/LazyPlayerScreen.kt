@@ -477,7 +477,7 @@ private fun IntroState(onPermission: () -> Unit, onChooseFolder: () -> Unit) {
         horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.Center) {
         Icon(Icons.Rounded.LibraryMusic, null, tint = MistWhite, modifier = Modifier.size(42.dp))
         Spacer(Modifier.height(28.dp))
-        Text("Your music.\\nOnly yours.", color = MistWhite, fontSize = 31.sp,
+        Text("Your music.\nOnly yours.", color = MistWhite, fontSize = 31.sp,
             lineHeight = 38.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(14.dp))
         Text("Listen to audio saved on this phone. No account, upload or streaming needed.",
