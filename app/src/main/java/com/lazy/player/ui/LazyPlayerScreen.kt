@@ -713,10 +713,10 @@ private fun UnifiedDock(
         Modifier.fillMaxWidth().padding(horizontal = 14.dp)
             .testTag("unified-dock")
             .clip(shape)
-            .background(Color(0xFFDBD8D1).copy(alpha = 0.15f))
+            .background(Color(0xFFBFC1BE).copy(alpha = 0.095f))
             .background(Brush.verticalGradient(listOf(
-                Color.White.copy(alpha = 0.095f),
-                Color(0xFF77746F).copy(alpha = 0.045f)
+                Color.White.copy(alpha = 0.052f),
+                Color(0xFF77746F).copy(alpha = 0.018f)
             )))
     ) {
         if (track != null) {

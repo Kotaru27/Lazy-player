@@ -176,30 +176,48 @@ fun PrefetchSwipeArtwork(next: AudioTrack?, previous: AudioTrack?, targetPx: Int
 
 @Composable
 private fun MissingCover(track: AudioTrack?, targetPx: Int, showCaption: Boolean) {
-    val albumName = track?.album?.takeUnless {
-        it.isBlank() || it.equals("Unknown album", ignoreCase = true)
-    } ?: track?.artist.orEmpty()
-    val glyph = albumName.trim().take(1).uppercase().ifEmpty { "♪" }
-    // A single reserved archival mark, deliberately not a counterfeit portrait,
-    // fake record player, decorative waveform or random full-bleed artwork.
-    Box(Modifier.fillMaxSize().background(Color(0xFF282925)),
-        contentAlignment = Alignment.Center) {
-        Box(Modifier.fillMaxSize().padding(13.dp)) {
-            Box(Modifier.align(Alignment.TopStart).size(20.dp, 2.dp)
-                .background(MistWhite.copy(alpha = 0.30f)))
-            Text("LP", Modifier.align(Alignment.TopEnd),
-                color = MistWhite.copy(alpha = 0.30f),
-                fontSize = if (targetPx > 240) 12.sp else 7.sp,
-                letterSpacing = 1.sp, fontWeight = FontWeight.Medium)
-        }
-        Text(glyph, fontSize = if (targetPx > 240) 69.sp else 22.sp,
-            color = MistWhite.copy(alpha = 0.83f),
-            fontWeight = FontWeight.Light)
-        if (targetPx > 240 && showCaption && albumName.isNotBlank()) {
-            Text(albumName, Modifier.align(Alignment.BottomStart)
-                .padding(start = 18.dp, end = 18.dp, bottom = 15.dp),
-                color = SoftText, fontSize = 12.sp,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
+    val name = track?.album?.takeUnless { it.isBlank() || it.equals("Unknown album", true) }
+        ?: track?.artist.orEmpty()
+    val seed = (track?.albumId?.takeIf { it > 0L }
+        ?: name.hashCode().toLong()).and(Long.MAX_VALUE)
+    // A muted material, not a fabricated album illustration or a giant initial.
+    val tones = listOf(
+        Color(0xFF343536) to Color(0xFF202224),
+        Color(0xFF333436) to Color(0xFF202123),
+        Color(0xFF313634) to Color(0xFF1F2321),
+        Color(0xFF36332F) to Color(0xFF22211F),
+        Color(0xFF343239) to Color(0xFF222125)
+    )
+    val palette = tones[(seed % tones.size).toInt()]
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val compact = maxWidth < 96.dp
+        Box(Modifier.fillMaxSize().background(
+            Brush.linearGradient(listOf(palette.first, palette.second))
+        )) {
+            // Small, stable two-stroke mark: recognizable across cover sizes
+            // without presenting synthetic text as artwork.
+            Canvas(Modifier.fillMaxSize()) {
+                val u = size.minDimension
+                val cx = size.width * 0.50f
+                val cy = size.height * 0.49f
+                val reach = u * 0.115f
+                val width = (u * 0.009f).coerceAtLeast(1f)
+                val ink = Color.White.copy(alpha = 0.46f)
+                drawLine(ink, Offset(cx - reach, cy - reach),
+                    Offset(cx - reach, cy + reach), strokeWidth = width)
+                drawLine(ink, Offset(cx - reach, cy + reach),
+                    Offset(cx + reach * 0.42f, cy + reach), strokeWidth = width)
+                drawLine(ink, Offset(cx + reach * 0.52f, cy - reach),
+                    Offset(cx + reach * 0.52f, cy + reach * 0.30f), strokeWidth = width)
+                drawCircle(ink, radius = (u * 0.015f).coerceAtLeast(1.2f),
+                    center = Offset(cx + reach * 0.52f, cy + reach * 0.68f))
+            }
+            if (!compact && showCaption && name.isNotBlank()) {
+                Text(name, Modifier.align(Alignment.BottomStart)
+                    .padding(start = 17.dp, end = 17.dp, bottom = 15.dp),
+                    color = Color.White.copy(alpha = 0.65f),
+                    fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }
