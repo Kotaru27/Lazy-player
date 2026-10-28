@@ -56,7 +56,7 @@ internal fun TrackMotionSurface(
             else if (displacement < 0f) next else previous
         val towardsNext = if (settling) toNext else displacement < 0f
         Box(Modifier.fillMaxSize().clip(RoundedCornerShape(18.dp))
-            .pointerInput(track.id, canNext, canPrevious, widthPx, reduceMotion) {
+            .pointerInput(track.id, next?.id, previous?.id, canNext, canPrevious, widthPx, reduceMotion) {
                 var delta = 0f
                 detectHorizontalDragGestures(
                     onDragStart = {
@@ -67,7 +67,12 @@ internal fun TrackMotionSurface(
                             delta += amount
                             val d = if ((delta < 0 && !canNext) ||
                                 (delta > 0 && !canPrevious)) delta * 0.12f else delta
-                            displacement = d.coerceIn(-widthPx, widthPx)
+                            // When no real visual neighbour is known (notably
+                            // shuffle), retain the current cover and only hint at
+                            // the gesture; never reveal a blank artwork viewport.
+                            val hasVisualNeighbour = if (delta < 0f) next != null else previous != null
+                            val limit = if (hasVisualNeighbour) widthPx else widthPx * 0.16f
+                            displacement = d.coerceIn(-limit, limit)
                             event.consume()
                         }
                     },
@@ -95,6 +100,10 @@ internal fun TrackMotionSurface(
                                             if (toNext) -widthPx else widthPx,
                                             tween(165, easing = FastOutSlowInEasing)
                                         ) { displacement = value }
+                                    } else {
+                                        // Fallback: no adjacent artwork is known, so
+                                        // don't push the only cover out of the screen.
+                                        displacement = 0f
                                     }
                                     val changed = withTimeoutOrNull(650L) {
                                         snapshotFlow { actual.value.id }
